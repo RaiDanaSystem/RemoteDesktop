@@ -73,6 +73,7 @@ class RtcSession(
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
             iceCandidatePoolSize = 0
+            disableIPv6OnWifi = true
         }
 
         val conn = f.createPeerConnection(cfg, object : PeerConnection.Observer {
@@ -89,8 +90,11 @@ class RtcSession(
             }
 
             override fun onIceConnectionReceivingChange(b: Boolean) {}
-            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState?) {}
+            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState?) {
+                listener.onLog("ICE gathering: $s")
+            }
             override fun onIceCandidate(c: IceCandidate) {
+                listener.onLog("local cand: " + c.sdp.substringAfter("candidate:").take(70))
                 if (offerSent) sendCandidate(c) else pendingLocal.add(c)
             }
 
@@ -108,6 +112,7 @@ class RtcSession(
         dc.registerObserver(object : DataChannel.Observer {
             override fun onBufferedAmountChange(previous: Long) {}
             override fun onStateChange() {
+                listener.onLog("DataChannel: ${dc.state()}")
                 when (dc.state()) {
                     DataChannel.State.OPEN -> listener.onChannelOpen()
                     DataChannel.State.CLOSED -> notifyClosed("Data channel closed")
@@ -198,6 +203,7 @@ class RtcSession(
 
     override fun onIceCandidate(peerId: String, candidate: String, sdpMid: String, sdpMLineIndex: Int) {
         if (peerId != this.peerId) return
+        listener.onLog("remote cand: " + candidate.substringAfter("candidate:").take(70))
         val c = IceCandidate(sdpMid.ifEmpty { "0" }, sdpMLineIndex, candidate)
         if (remoteSet) pc?.addIceCandidate(c) else pendingRemote.add(c)
     }

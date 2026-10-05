@@ -232,11 +232,14 @@ class SessionActivity : Activity(), RtcSession.Listener {
             val a = Api(server)
             api = a
             post { setStatus(getString(R.string.status_login)) }
+            log("server " + a.baseUrl)
             a.login(Config.SUPPORT_USERNAME, Config.SUPPORT_PASSWORD)
+            log("login ok")
 
             post { setStatus(getString(R.string.status_connecting)) }
             val conn = a.connect(code)
             sessionId = conn.sessionId
+            log("session " + conn.sessionId + " device " + conn.deviceName)
 
             post { setStatus(getString(R.string.status_waiting, conn.deviceName)) }
             val deadline = SystemClock.elapsedRealtime() + 3 * 60_000
@@ -252,15 +255,22 @@ class SessionActivity : Activity(), RtcSession.Listener {
             }
             if (ended) return
 
+            log("accepted by PC")
             post { setStatus(getString(R.string.status_rtc)) }
             val sig = Signaling(a.baseUrl, a.accessToken)
             signaling = sig
             sig.connect()
+            log("signaling connected")
+            // The PC prepares its WebRTC answerer right after accepting; an offer that arrives
+            // earlier would be wiped by that reset, so let it settle first.
+            Thread.sleep(1500)
             startRtc()
         } catch (e: ApiException) {
             endSession(e.message)
         } catch (e: Exception) {
-            endSession(e.message ?: e.javaClass.simpleName)
+            var t: Throwable = e
+            while (t.cause != null && t.cause !== t) t = t.cause!!
+            endSession("${e.javaClass.simpleName}: ${t.message ?: e.message ?: ""}")
         }
     }
 
@@ -270,6 +280,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val sig = signaling ?: return
         if (ended) return
         attempt++
+        log("offer attempt $attempt")
         rtc?.close()
         val r = RtcSession(applicationContext, sid, sig, this)
         rtc = r
@@ -277,10 +288,10 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val myAttempt = attempt
         ui.postDelayed({
             if (!ended && !channelOpen && myAttempt == attempt) {
-                if (attempt >= 4) endSession(getString(R.string.err_rtc_timeout))
+                if (attempt >= 3) endSession(getString(R.string.err_rtc_timeout))
                 else net.execute { startRtc() }
             }
-        }, 9000)
+        }, 14000)
     }
 
     private fun endSession(error: String?) {
@@ -288,6 +299,8 @@ class SessionActivity : Activity(), RtcSession.Listener {
         ended = true
         ui.removeCallbacks(ticker)
         ui.removeCallbacks(statsTick)
+        if (error != null) log("END: $error")
+        val shownError = if (error == null) null else error + "\n\n" + logTail(14)
         val sid = sessionId
         val a = api
         val r = rtc
@@ -303,7 +316,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
         }.start()
         ui.post {
-            val data = Intent().putExtra(EXTRA_ERROR, error ?: "")
+            val data = Intent().putExtra(EXTRA_ERROR, shownError ?: "")
             setResult(if (error == null) RESULT_OK else RESULT_CANCELED, data)
             if (!isFinishing) finish()
         }
@@ -336,10 +349,23 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val wasOpen = channelOpen
         channelOpen = false
         // Before the channel ever opened the retry watchdog in startRtc() handles failures.
+        log("channel closed: $reason (wasOpen=$wasOpen)")
         if (!ended && wasOpen) endSession(reason)
     }
 
-    override fun onLog(message: String) {}
+    override fun onLog(message: String) = log(message)
+
+    private val logLines = java.util.ArrayDeque<String>()
+    private val logFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+
+    @Synchronized
+    private fun log(message: String) {
+        logLines.addLast(logFmt.format(java.util.Date()) + " " + message)
+        while (logLines.size > 40) logLines.removeFirst()
+    }
+
+    @Synchronized
+    private fun logTail(n: Int): String = logLines.toList().takeLast(n).joinToString("\n")
 
     override fun onMessage(data: ByteArray) {
         bytesIn.addAndGet(data.size.toLong())

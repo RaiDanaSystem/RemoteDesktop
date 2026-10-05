@@ -24,7 +24,7 @@ class Signaling(private val baseUrl: String, private val token: String) {
     val isConnected: Boolean get() = hub?.connectionState == HubConnectionState.CONNECTED
 
     fun connect() {
-        val h = HubConnectionBuilder.create("$baseUrl/hubs/webrtc")
+        val h = HubConnectionBuilder.create("$baseUrl/hubs/webrtc?access_token=$token")
             .withAccessTokenProvider(Single.defer { Single.just(token) })
             .withTransport(TransportEnum.WEBSOCKETS)
             .build()

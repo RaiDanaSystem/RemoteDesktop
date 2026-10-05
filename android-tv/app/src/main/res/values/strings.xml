@@ -41,4 +41,14 @@
     <string name="hint_touch">Tap: click · Double-tap: double click · Long-press: right click · Drag: move pointer · Two fingers: scroll · ☰: menu</string>
     <string name="menu_drag_on">Drag mode: ON (finger drag holds left button)</string>
     <string name="menu_drag_off">Drag mode: OFF</string>
+    <string name="menu_quality_4k">Quality: 4K (30 fps)</string>
+    <string name="menu_quality_hd60">Quality: Full HD · 60 fps</string>
+    <string name="hint_view_only">View only — the PC did not allow control</string>
+    <string name="err_decoder_size">This device cannot decode that resolution — switched to Full HD</string>
+    <string name="lan_title">Computers on this network</string>
+    <string name="lan_none">No computers found yet. Open the Windows app on the PC (same Wi-Fi/network) or type its address below.</string>
+    <string name="lan_refresh">Refresh</string>
+    <string name="lan_manual_hint">PC address (e.g. 192.168.1.20)</string>
+    <string name="lan_connect">Connect</string>
+    <string name="server_section">Or connect through a server</string>
 </resources>

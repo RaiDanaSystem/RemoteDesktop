@@ -22,7 +22,7 @@ class RtcSession(
     private val sessionId: String,
     private val signaling: Signaling,
     private val listener: Listener
-) : Signaling.Listener {
+) : Signaling.Listener, Link {
 
     interface Listener {
         fun onChannelOpen()
@@ -62,7 +62,7 @@ class RtcSession(
     private val pendingRemote = ConcurrentLinkedQueue<IceCandidate>()
     private val pendingLocal = ConcurrentLinkedQueue<IceCandidate>()
 
-    val isOpen: Boolean get() = channel?.state() == DataChannel.State.OPEN
+    override val isOpen: Boolean get() = channel?.state() == DataChannel.State.OPEN
 
     fun start() {
         signaling.listener = this
@@ -174,7 +174,7 @@ class RtcSession(
         }
     }
 
-    fun send(bytes: ByteArray): Boolean {
+    override fun send(bytes: ByteArray): Boolean {
         val dc = channel ?: return false
         if (dc.state() != DataChannel.State.OPEN) return false
         return dc.send(DataChannel.Buffer(ByteBuffer.wrap(bytes), true))
@@ -225,7 +225,7 @@ class RtcSession(
         listener.onChannelClosed(reason)
     }
 
-    fun close() {
+    override fun close() {
         if (closed) return
         closed = true
         try {

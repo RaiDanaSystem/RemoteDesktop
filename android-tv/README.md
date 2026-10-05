@@ -7,6 +7,12 @@ with hardware H.264 decoding (JPEG-tile fallback), while sending mouse / keyboar
 
 ## Usage
 
+**Local network, no server (recommended):** open the Windows app on the PC (it advertises itself on the LAN
+automatically) and open this app — the PC shows up in *Computers on this network*; select it and accept the request
+on the PC (Yes = view + control, No = view only). A PC's IP can also be typed manually.
+
+**Through the server (optional):**
+
 1. Start the server (`src/Server/Api`) and the **CustomerAgent** on the PC; note the support code.
 2. In the PC's CustomerAgent, make sure remote input is allowed if you want to control the PC.
 3. On the TV open **Remote Desktop TV** and enter:

@@ -157,10 +157,12 @@ object Proto {
     fun key(vk: Int, down: Boolean) = input(IN_KEY, vk = vk, action = if (down) ACT_DOWN else ACT_UP)
     fun char(c: Char) = input(IN_CHAR, ch = c)
 
-    fun streamSettings(fps: Int, quality: Int): ByteArray {
+    /** @param maxWidth 0 = automatic (follows quality); up to 3840 for 4K. */
+    fun streamSettings(fps: Int, quality: Int, maxWidth: Int = 0): ByteArray {
         val meta = JSONObject()
             .put("Fps", fps.toString()).put("fps", fps.toString())
             .put("Quality", quality.toString()).put("quality", quality.toString())
+            .put("MaxWidth", maxWidth.toString()).put("maxWidth", maxWidth.toString())
         val j = JSONObject()
             .put("action", CTL_STREAM_SETTINGS)
             .put("fps", fps)

@@ -41,4 +41,14 @@
     <string name="hint_touch">تپ: کلیک · دوبار تپ: دابل کلیک · نگه‌داشتن: کلیک راست · کشیدن: حرکت نشانگر · دو انگشت: اسکرول · ☰: منو</string>
     <string name="menu_drag_on">حالت درگ: روشن (کشیدن انگشت = نگه‌داشتن کلیک چپ)</string>
     <string name="menu_drag_off">حالت درگ: خاموش</string>
+    <string name="menu_quality_4k">کیفیت: 4K (۳۰ فریم)</string>
+    <string name="menu_quality_hd60">کیفیت: Full HD · ۶۰ فریم</string>
+    <string name="hint_view_only">فقط مشاهده — رایانه اجازه‌ی کنترل نداد</string>
+    <string name="err_decoder_size">این دستگاه این وضوح را رمزگشایی نمی‌کند — به Full HD تغییر کرد</string>
+    <string name="lan_title">رایانه‌های این شبکه</string>
+    <string name="lan_none">هنوز رایانه‌ای پیدا نشد. برنامه‌ی ویندوز را روی رایانه (همین وای‌فای/شبکه) باز کنید یا آدرس را پایین بنویسید.</string>
+    <string name="lan_refresh">بازخوانی</string>
+    <string name="lan_manual_hint">آدرس رایانه (مثلاً 192.168.1.20)</string>
+    <string name="lan_connect">اتصال</string>
+    <string name="server_section">یا از طریق سرور وصل شوید</string>
 </resources>

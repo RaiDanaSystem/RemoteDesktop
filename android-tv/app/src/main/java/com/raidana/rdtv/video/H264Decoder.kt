@@ -69,7 +69,11 @@ class H264Assembler {
  * Low-latency hardware H.264 decoder rendering straight to a [Surface].
  * Frames are decoded and released to the display as soon as they leave the codec.
  */
-class H264Decoder(private val surface: Surface, private val onSizeKnown: (Int, Int) -> Unit) {
+class H264Decoder(
+    private val surface: Surface,
+    private val onSizeKnown: (Int, Int) -> Unit,
+    private val onUnsupported: (Int, Int) -> Unit = { _, _ -> }
+) {
     private var codec: MediaCodec? = null
     private var width = 0
     private var height = 0
@@ -121,7 +125,7 @@ class H264Decoder(private val surface: Surface, private val onSizeKnown: (Int, I
             val (sps, pps) = findParamSets(au.annexB)
             if (sps != null) fmt.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
             if (pps != null) fmt.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
-            fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2 * 1024 * 1024)
+            fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 4 * 1024 * 1024)
             if (Build.VERSION.SDK_INT >= 30) fmt.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
             if (Build.VERSION.SDK_INT >= 23) {
                 fmt.setInteger(MediaFormat.KEY_PRIORITY, 0)
@@ -144,6 +148,7 @@ class H264Decoder(private val surface: Surface, private val onSizeKnown: (Int, I
             true
         } catch (e: Exception) {
             codec = null
+            onUnsupported(au.width, au.height)
             false
         }
     }

@@ -29,6 +29,8 @@ import com.raidana.rdtv.net.ApiException
 import com.raidana.rdtv.net.Signaling
 import com.raidana.rdtv.proto.Proto
 import com.raidana.rdtv.proto.VK
+import com.raidana.rdtv.net.DirectLink
+import com.raidana.rdtv.rtc.Link
 import com.raidana.rdtv.rtc.RtcSession
 import com.raidana.rdtv.ui.KeyMap
 import com.raidana.rdtv.ui.RemoteScreenView
@@ -54,7 +56,9 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     private var api: Api? = null
     private var signaling: Signaling? = null
-    private var rtc: RtcSession? = null
+    @Volatile private var rtc: Link? = null
+    private var unsupportedHandled = false
+    private var maxWidth = 0
     private var sessionId: String? = null
 
     @Volatile private var ended = false
@@ -158,7 +162,11 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
         screen.surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
-                decoder = H264Decoder(holder.surface) { w, h -> ui.post { screen.setVideoSize(w, h) } }
+                decoder = H264Decoder(
+                    holder.surface,
+                    { w, h -> ui.post { screen.setVideoSize(w, h) } },
+                    { w, h -> ui.post { onDecoderUnsupported(w, h) } }
+                )
             }
 
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
@@ -173,9 +181,16 @@ class SessionActivity : Activity(), RtcSession.Listener {
         hideSystemUi()
         setStatus(getString(R.string.status_starting))
 
-        val server = intent.getStringExtra(EXTRA_SERVER).orEmpty()
-        val code = intent.getStringExtra(EXTRA_CODE).orEmpty()
-        net.execute { runFlow(server, code) }
+        val directHost = intent.getStringExtra(EXTRA_HOST)
+        if (directHost != null) {
+            val port = intent.getIntExtra(EXTRA_PORT, DirectLink.DEFAULT_PORT)
+            val name = intent.getStringExtra(EXTRA_NAME) ?: directHost
+            net.execute { runDirect(directHost, port, name) }
+        } else {
+            val server = intent.getStringExtra(EXTRA_SERVER).orEmpty()
+            val code = intent.getStringExtra(EXTRA_CODE).orEmpty()
+            net.execute { runFlow(server, code) }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -226,6 +241,37 @@ class SessionActivity : Activity(), RtcSession.Listener {
     }
 
     // ----------------------------------------------------------------- connection flow
+
+    /** Server-less LAN mode: connect straight to the PC's TCP port. */
+    private fun runDirect(host: String, port: Int, name: String) {
+        try {
+            post { setStatus(getString(R.string.status_waiting, name)) }
+            log("direct connect $host:$port")
+            val prefs = getSharedPreferences("rdtv", Context.MODE_PRIVATE)
+            val id = prefs.getString("viewerId", null)
+                ?: java.util.UUID.randomUUID().toString().replace("-", "").also { prefs.edit().putString("viewerId", it).apply() }
+
+            val res = DirectLink.connect(host, port, id, android.os.Build.MODEL ?: "Android",
+                object : DirectLink.Listener {
+                    override fun onMessage(data: ByteArray) = this@SessionActivity.onMessage(data)
+                    override fun onClosed(reason: String) = this@SessionActivity.onChannelClosed(reason)
+                })
+            val link = res.link
+            if (link == null) {
+                endSession(res.error ?: getString(R.string.err_rejected))
+                return
+            }
+            if (ended) { link.close(); return }
+            rtc = link
+            link.startReading()
+            log("accepted by ${link.hostName} viewOnly=${link.viewOnly}")
+            fps = 30; quality = 80; maxWidth = 0
+            onChannelOpen()
+            if (link.viewOnly) post { flashHint(R.string.hint_view_only) }
+        } catch (e: Exception) {
+            endSession("${e.javaClass.simpleName}: ${e.message ?: ""}")
+        }
+    }
 
     private fun runFlow(server: String, code: String) {
         try {
@@ -307,7 +353,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val s = signaling
         val d = decoder
         Thread {
-            try { r?.send(Proto.disconnect()) } catch (_: Exception) {}
+            try { r?.send(Proto.disconnect()); Thread.sleep(150) } catch (_: Exception) {}
             try { r?.close() } catch (_: Exception) {}
             try { s?.close() } catch (_: Exception) {}
             try { if (sid != null) a?.terminate(sid) } catch (_: Exception) {}
@@ -336,7 +382,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             ui.postDelayed({ hintText.visibility = View.GONE }, 9000)
             ui.postDelayed(statsTick, 1000)
         }
-        rtc?.send(Proto.streamSettings(fps, quality))
+        rtc?.send(Proto.streamSettings(fps, quality, maxWidth))
         Thread {
             while (!ended && channelOpen) {
                 rtc?.send(Proto.ping())
@@ -771,9 +817,11 @@ class SessionActivity : Activity(), RtcSession.Listener {
         item("Alt + Tab") { pressKey(VK.ALT, VK.TAB) }
         item("Ctrl + C") { pressKey(VK.CTRL, 'C'.code) }
         item("Ctrl + V") { pressKey(VK.CTRL, 'V'.code) }
-        item(getString(R.string.menu_quality_max)) { applyQuality(30, 80) }
-        item(getString(R.string.menu_quality_balanced)) { applyQuality(30, 60) }
-        item(getString(R.string.menu_quality_low)) { applyQuality(20, 40) }
+        item(getString(R.string.menu_quality_4k)) { unsupportedHandled = false; applyQuality(30, 80, 3840) }
+        item(getString(R.string.menu_quality_hd60)) { applyQuality(60, 80, 1920) }
+        item(getString(R.string.menu_quality_max)) { applyQuality(30, 80, 1920) }
+        item(getString(R.string.menu_quality_balanced)) { applyQuality(30, 60, 0) }
+        item(getString(R.string.menu_quality_low)) { applyQuality(20, 40, 0) }
         item(getString(if (remoteCursor) R.string.menu_remote_cursor_off else R.string.menu_remote_cursor_on)) {
             remoteCursor = !remoteCursor
             send(Proto.showRemoteCursor(remoteCursor))
@@ -796,9 +844,18 @@ class SessionActivity : Activity(), RtcSession.Listener {
         menuPanel.visibility = View.GONE
     }
 
-    private fun applyQuality(f: Int, q: Int) {
-        fps = f; quality = q
-        send(Proto.streamSettings(f, q))
+    private fun applyQuality(f: Int, q: Int, w: Int) {
+        fps = f; quality = q; maxWidth = w
+        send(Proto.streamSettings(f, q, w))
+    }
+
+    /** The TV's hardware decoder cannot handle the requested size (e.g. 4K): fall back to 1080p. */
+    private fun onDecoderUnsupported(w: Int, h: Int) {
+        if (unsupportedHandled || ended) return
+        unsupportedHandled = true
+        log("decoder cannot handle ${w}x$h → 1080p")
+        flashHint(R.string.err_decoder_size)
+        applyQuality(30, 80, 1920)
     }
 
     private fun promptText() {
@@ -826,6 +883,9 @@ class SessionActivity : Activity(), RtcSession.Listener {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val EXTRA_HOST = "host"
+        const val EXTRA_PORT = "port"
+        const val EXTRA_NAME = "name"
         const val EXTRA_SERVER = "server"
         const val EXTRA_CODE = "code"
         const val EXTRA_ERROR = "error"

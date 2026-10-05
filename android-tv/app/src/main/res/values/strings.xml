@@ -58,6 +58,4 @@
     <string name="hint_codec_h264">H.264 mode</string>
     <string name="menu_sound_on">Sound: OFF → turn on</string>
     <string name="menu_sound_off">Sound: ON → turn off</string>
-    <string name="menu_mute_host_on">Mute the PC's own speakers: OFF → turn on</string>
-    <string name="menu_mute_host_off">Mute the PC's own speakers: ON → turn off</string>
 </resources>

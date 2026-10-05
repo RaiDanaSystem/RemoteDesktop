@@ -61,8 +61,9 @@ class SessionActivity : Activity(), RtcSession.Listener {
     private var maxWidth = 0
     private var codecMode = "h264"
     private var stuckSeconds = 0
-    private var lastFed = 0L
+    private var lastAu = 0L
     private var lastRenderedForWatchdog = 0L
+    private val auCount = AtomicLong()
     private var tilesRequested = false
     private var sessionId: String? = null
 
@@ -451,6 +452,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         if (len < 4) return
         if (d[off] == 'R'.code.toByte() && d[off + 1] == 'D'.code.toByte() && d[off + 2] == 'H'.code.toByte()) {
             val au = assembler.add(d, off, len) ?: return
+            auCount.incrementAndGet()
             setStream(au.width, au.height)
             val dec = decoder ?: return
             if (tiles.bitmap != null) { tiles.clear() }
@@ -483,25 +485,27 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val mbps = (by - lastBytes) * 8 / dt / 1_000_000.0
         lastRendered = rendered; lastTiles = tl; lastBytes = by; lastStatsAt = now
         val d = decoder
-        // Watchdog: access units are being fed but nothing reaches the screen → ask the PC for JPEG tiles.
+        // Watchdog: access units keep arriving but nothing reaches the screen → try the next decoder
+        // configuration, and finally ask the PC for JPEG tiles (software path that works everywhere).
         if (d != null && codecMode == "h264") {
-            val fedNow = d.fed.get()
+            val au = auCount.get()
             val r = d.rendered.get()
-            if (fedNow - lastFed >= 15 && r == lastRenderedForWatchdog) stuckSeconds++ else stuckSeconds = 0
-            lastFed = fedNow; lastRenderedForWatchdog = r
-            if (stuckSeconds == 3 && !d.plainConfig) {
-                log("H.264 output stalled → retry decoder without low-latency hints")
-                d.fallbackToPlainConfig()
-            }
-            if (stuckSeconds >= 8 && !tilesRequested) {
-                tilesRequested = true
-                log("H.264 output stalled (fed=$fedNow out=$r err=${d.errors.get()} ${d.lastError}) → compatibility mode")
-                setCompatibilityMode(true, auto = true)
+            if (au - lastAu >= 3 && r == lastRenderedForWatchdog) stuckSeconds++ else stuckSeconds = 0
+            lastAu = au; lastRenderedForWatchdog = r
+            if (stuckSeconds >= 3) {
+                stuckSeconds = 0
+                log("H.264 output stalled (in=${d.fed.get()} out=$r err=${d.errors.get()} ${d.lastError})")
+                if (d.escalate()) {
+                    log("trying decoder ${d.describe()}")
+                } else if (!tilesRequested) {
+                    tilesRequested = true
+                    setCompatibilityMode(true, auto = true)
+                }
             }
         }
         if (showStats) {
             statsText.visibility = View.VISIBLE
-            val dec = if (d != null && d.codecName.isNotEmpty()) "  ${d.codecName} in/out ${d.fed.get()}/${d.rendered.get()} drop ${d.dropped.get()} err ${d.errors.get()}" else ""
+            val dec = if (d != null && d.codecName.isNotEmpty()) "  ${d.describe()} in/out ${d.fed.get()}/${d.rendered.get()} drop ${d.dropped.get()} err ${d.errors.get()}" else ""
             statsText.text = String.format(
                 "%dx%d  %.0f fps  %.1f Mbit/s  ping %s  %s%s",
                 streamW, streamH, fpsNow, mbps, if (rttMs >= 0) "$rttMs ms" else "—",

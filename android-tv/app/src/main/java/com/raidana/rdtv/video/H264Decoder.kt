@@ -1,6 +1,7 @@
 package com.raidana.rdtv.video
 
 import android.media.MediaCodec
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Build
 import android.view.Surface
@@ -91,14 +92,48 @@ class H264Decoder(
     @Volatile var codecName = ""
     @Volatile var lastError = ""
 
-    /** True after a stall: restart without the low-latency/priority/operating-rate hints (some SoCs choke on them). */
-    @Volatile var plainConfig = false
-        private set
+    // Decoder attempts, tried in order when output stalls: default decoder with low-latency hints,
+    // default decoder with a plain config, then every other AVC decoder on the device.
+    private class Attempt(val name: String?, val plain: Boolean)
 
-    fun fallbackToPlainConfig() {
-        plainConfig = true
+    private val attempts: List<Attempt> by lazy {
+        val names = try {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .filter { !it.isEncoder && it.supportedTypes.any { t -> t.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) } }
+                .map { it.name }
+                .filter { !it.contains("secure", true) }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val list = ArrayList<Attempt>()
+        list.add(Attempt(names.firstOrNull(), false))
+        list.add(Attempt(names.firstOrNull(), true))
+        for (n in names.drop(1)) list.add(Attempt(n, true))
+        list
+    }
+    private var attemptIndex = 0
+    val plainConfig: Boolean get() = attempts[attemptIndex].plain
+
+    /** Moves to the next decoder configuration. Returns false when every option has been tried. */
+    fun escalate(): Boolean {
+        if (attemptIndex + 1 >= attempts.size) return false
+        attemptIndex++
         restartRequested = true
-        lastError = "restart with plain decoder config"
+        lastError = "→ ${describe()}"
+        return true
+    }
+
+    fun describe(): String {
+        val a = attempts[attemptIndex]
+        return (a.name ?: "default") + if (a.plain) " (plain)" else ""
+    }
+
+    private fun describeError(e: Exception): String {
+        if (e is MediaCodec.CodecException) {
+            val code = if (Build.VERSION.SDK_INT >= 23) e.errorCode.toString() else "?"
+            return "CodecException code=$code recoverable=${e.isRecoverable} transient=${e.isTransient} ${e.diagnosticInfo}"
+        }
+        return "${e.javaClass.simpleName} ${e.message ?: ""}"
     }
 
     /** Set by the output thread after a non-recoverable codec error; the next keyframe restarts the codec. */
@@ -138,7 +173,7 @@ class H264Decoder(
             fed.incrementAndGet()
             return true
         } catch (e: Exception) {
-            lastError = "feed: ${e.javaClass.simpleName} ${e.message ?: ""}"
+            lastError = "feed: ${describeError(e)}"
             errors.incrementAndGet()
             stopCodec()
             return false
@@ -153,14 +188,16 @@ class H264Decoder(
             if (sps != null) fmt.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
             if (pps != null) fmt.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
             fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 4 * 1024 * 1024)
-            if (!plainConfig) {
+            if (!attempts[attemptIndex].plain) {
                 if (Build.VERSION.SDK_INT >= 30) fmt.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
                 if (Build.VERSION.SDK_INT >= 23) {
                     fmt.setInteger(MediaFormat.KEY_PRIORITY, 0)
                     fmt.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
                 }
             }
-            val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            val chosen = attempts[attemptIndex].name
+            val c = if (chosen != null) MediaCodec.createByCodecName(chosen)
+            else MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             c.configure(fmt, surface, null, 0)
             c.start()
             codecName = try { c.name } catch (_: Exception) { "?" }
@@ -173,7 +210,7 @@ class H264Decoder(
             onSizeKnown(au.width, au.height)
             true
         } catch (e: Exception) {
-            lastError = "start: ${e.javaClass.simpleName} ${e.message ?: ""}"
+            lastError = "start: ${describeError(e)}"
             errors.incrementAndGet()
             codec = null
             onUnsupported(au.width, au.height)
@@ -192,7 +229,7 @@ class H264Decoder(
                 }
             } catch (e: MediaCodec.CodecException) {
                 errors.incrementAndGet()
-                lastError = "codec: ${e.diagnosticInfo}"
+                lastError = "codec: ${describeError(e)}"
                 if (!e.isTransient) { restartRequested = true; break }
             } catch (e: Exception) {
                 // stopCodec() racing with this thread is expected; anything else needs a restart.

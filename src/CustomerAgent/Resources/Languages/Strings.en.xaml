@@ -1,0 +1,42 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- General -->
+    <system:String x:Key="App_Title">Rexon</system:String>
+    <system:String x:Key="Customer_BrandTagline">Share this ID with your support agent so they can connect to your screen securely.</system:String>
+
+    <!-- Customer Main -->
+    <system:String x:Key="Customer_SupportId">Your Support ID</system:String>
+    <system:String x:Key="Customer_ShareCode">Share this code with our support team</system:String>
+    <system:String x:Key="Customer_Expires">Expires</system:String>
+    <system:String x:Key="Customer_ExpiresIn">Expires in {0} min</system:String>
+    <system:String x:Key="Customer_RefreshCode">Get New Code</system:String>
+    <system:String x:Key="Customer_WaitingForAgent">Waiting for support agent...</system:String>
+    <system:String x:Key="Customer_Offline">Offline</system:String>
+    <system:String x:Key="Customer_CodeFailed">Failed to generate support code.</system:String>
+    <system:String x:Key="Customer_Error_Generic">An error occurred. Please try again.</system:String>
+
+    <!-- Connection Request -->
+    <system:String x:Key="Customer_ConnRequestTitle">Incoming Support Request</system:String>
+    <system:String x:Key="Customer_AgentWantsToConnect">{0} wants to connect to your computer</system:String>
+    <system:String x:Key="Customer_Accept">Accept</system:String>
+    <system:String x:Key="Customer_Reject">Reject</system:String>
+    <system:String x:Key="Customer_AcceptFailed">Failed to accept connection.</system:String>
+
+    <!-- Active Session -->
+    <system:String x:Key="Customer_ActiveSession">Active Support Session</system:String>
+    <system:String x:Key="Customer_ConnectedToAgent">Connected to support agent</system:String>
+    <system:String x:Key="Customer_ConnectedTo">Connected to: {0}</system:String>
+    <system:String x:Key="Customer_Disconnect">End Session</system:String>
+    <system:String x:Key="Customer_SupportActive">Remote support is active</system:String>
+    <system:String x:Key="Customer_SupportActiveWarning">A support agent has access to your screen</system:String>
+    <system:String x:Key="Customer_AllowRemote">Allow mouse and keyboard</system:String>
+    <system:String x:Key="Customer_AllowClipboard">Allow clipboard sync</system:String>
+    <system:String x:Key="Customer_AllowFiles">Allow file transfer</system:String>
+    <system:String x:Key="Customer_IncomingFile">Incoming file: {0}</system:String>
+    <system:String x:Key="Customer_SaveFile">Save</system:String>
+    <system:String x:Key="Customer_RejectFile">Reject</system:String>
+    <system:String x:Key="Customer_SeeScreen">They will be able to see your screen</system:String>
+
+</ResourceDictionary>

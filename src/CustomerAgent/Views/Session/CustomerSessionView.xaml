@@ -1,0 +1,62 @@
+<UserControl x:Class="CustomerAgent.Views.Session.CustomerSessionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource Brush.Surface}" CornerRadius="16" Padding="20"
+            BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Background="#14332F" CornerRadius="12" Padding="16" Margin="0,0,0,12"
+                    Visibility="{Binding IsActiveSession, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Fill="{StaticResource Brush.Success}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ActiveSessionLabel}" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Brush.Success}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding AgentName}" Foreground="#99F6E4" FontSize="13" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding SessionDuration}" Foreground="#5EEAD4" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Margin="0,0,0,12">
+                <UniformGrid Columns="2">
+                    <StackPanel Orientation="Horizontal" Margin="0,6">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" Fill="{StaticResource Brush.Faint}"/>
+                        <TextBlock Text="Screen" Foreground="{StaticResource Brush.Muted}" FontSize="12"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,6">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" Fill="{StaticResource Brush.Faint}"/>
+                        <TextBlock Text="Control" Foreground="{StaticResource Brush.Muted}" FontSize="12"/>
+                    </StackPanel>
+                </UniformGrid>
+            </Border>
+
+            <Border Grid.Row="2" Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" HorizontalAlignment="Center" Margin="0,0,0,8">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding ConnectionStatusColor}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <TextBlock Text="{Binding ConnectionStatus}" Foreground="{StaticResource Brush.Muted}" FontSize="13"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <Button Grid.Row="3" Content="End Session" Command="{Binding EndSessionCommand}"
+                    Style="{StaticResource Btn.Danger}" Height="42" FontSize="14"
+                    HorizontalAlignment="Stretch" Margin="0,12,0,0"
+                    Visibility="{Binding IsActiveSession, Converter={StaticResource BoolToVis}}"/>
+        </Grid>
+    </Border>
+</UserControl>

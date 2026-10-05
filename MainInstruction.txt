@@ -1,0 +1,741 @@
+# Enterprise Remote Support Application
+
+You are the lead software architect and senior Windows/networking engineer responsible for building a production-ready private remote-support platform for our company.
+
+This is NOT a public remote desktop product.
+
+The application will be used internally by our company's support team to remotely assist customers.
+
+I am not a professional programmer. Therefore, you must implement the project step-by-step, explain important decisions in simple language, and never assume that I will manually write missing code.
+
+Do not generate a huge amount of code at once.
+
+Build the system incrementally, compile it, run tests, detect errors, fix them, and then continue to the next phase.
+
+---
+
+# 1. Product
+
+We need a Windows remote-support system conceptually similar to AnyDesk / TeamViewer, but private and controlled entirely by our company.
+
+There are TWO separate Windows applications.
+
+## A. Support Agent
+
+This application is ONLY for our internal support employees.
+
+It must be distributed privately and must NOT be available for public download.
+
+Only Support Agent users can initiate remote connections.
+
+Support Agent capabilities:
+
+* Authenticate with our server
+* Create remote-support sessions
+* Connect to customers
+* View customer's screen
+* Remote mouse control
+* Remote keyboard control
+* Clipboard text synchronization
+* Clipboard file synchronization
+* File upload
+* File download
+* Drag & drop file transfer
+* Remote file browser
+* Chat
+* Full-screen mode
+* Display scaling
+* Connection quality controls
+* Reconnect
+* Disconnect
+* Multiple simultaneous sessions
+* Customer/system information
+* Connection status
+* Session duration
+* Transfer progress
+* Error reporting
+* Logging
+
+---
+
+# 2. Customer Agent
+
+This application will be publicly downloadable from our company's website.
+
+The Customer Agent MUST NOT be able to initiate connections to other computers.
+
+Its primary purpose is to allow our support team to connect to the customer's computer.
+
+Customer workflow:
+
+1. Customer downloads Customer Agent.
+2. Customer starts the application.
+3. Application generates/displays a unique Support ID or Support Code.
+4. Customer provides the code to our support employee.
+5. Support employee enters the code in Support Agent.
+6. Customer receives a clear connection request.
+7. Customer explicitly accepts the connection.
+8. Remote session starts.
+9. Customer can see that a support session is active.
+10. Customer can terminate the session at any time.
+
+Customer Agent capabilities:
+
+* Generate support ID
+* Display support ID
+* Receive connection request
+* Accept/reject connection
+* Show support employee identity
+* Show connection status
+* View active-session information
+* Disconnect
+* Clipboard synchronization
+* File transfer
+* Chat
+* Basic system information
+
+Customer Agent MUST NOT contain a normal "Connect to another computer" feature.
+
+---
+
+# 3. Technology Stack
+
+Use:
+
+## Windows Clients
+
+C#
+
+.NET 8 or the latest stable LTS version available during implementation.
+
+WinUI 3 for the desktop UI.
+
+Use native Windows APIs where required.
+
+Avoid Electron unless there is a strong technical reason.
+
+The application must be optimized for Windows desktop usage.
+
+---
+
+# 4. Backend
+
+Use:
+
+ASP.NET Core
+
+C#
+
+.NET 8+ LTS
+
+REST APIs where appropriate.
+
+SignalR/WebSocket for real-time signaling and session communication where appropriate.
+
+The backend must be designed for production deployment on our own server.
+
+---
+
+# 5. Database
+
+Use PostgreSQL unless there is a strong architectural reason to use another database.
+
+Store:
+
+* Support users
+* Roles
+* Devices
+* Customer agents
+* Support IDs
+* Sessions
+* Session events
+* Authentication information
+* Audit logs
+* Configuration
+* File-transfer metadata
+
+Do NOT store remote desktop video frames permanently.
+
+---
+
+# 6. Remote Desktop Architecture
+
+Do NOT blindly route all traffic through the central server.
+
+Design the system using:
+
+1. Signaling server
+2. Direct peer-to-peer connection when possible
+3. Relay server as fallback when direct connectivity is impossible
+
+Preferred architecture:
+
+Support Agent
+|
+| signaling
+v
+Server
+|
+| signaling
+v
+Customer Agent
+
+After connection establishment:
+
+Support Agent <--------> Customer Agent
+
+If direct communication is impossible:
+
+Support Agent <------> Relay Server <------> Customer Agent
+
+The architecture must be designed so that the relay server does not become an unnecessary bottleneck.
+
+---
+
+# 7. Remote Screen
+
+Implement real-time remote screen streaming.
+
+Requirements:
+
+* Efficient screen capture
+* Low latency
+* Adjustable image quality
+* Adjustable frame rate
+* Resolution adaptation
+* Compression
+* Minimize CPU usage
+* Minimize bandwidth usage
+* Detect screen changes efficiently
+* Support multiple monitors
+* Allow selecting a monitor
+* Full-screen viewing
+* Scaling modes
+
+Use appropriate native Windows APIs and modern encoding/compression techniques.
+
+Do NOT implement an inefficient solution that continuously sends full-size screenshots.
+
+---
+
+# 8. Remote Input
+
+Implement:
+
+* Mouse move
+* Left click
+* Right click
+* Double click
+* Middle click
+* Mouse wheel
+* Keyboard press
+* Keyboard release
+* Key combinations
+* Modifier keys
+* Copy/paste
+* Special keys
+
+Remote input must be securely authorized.
+
+The Customer Agent must never accept remote input unless an authorized support session has been explicitly established.
+
+---
+
+# 9. Clipboard
+
+Support:
+
+* Plain text
+* Unicode text
+* Files
+
+Clipboard synchronization must be controllable.
+
+For security reasons, clipboard synchronization should be session-specific.
+
+Do not blindly synchronize sensitive clipboard contents without appropriate controls.
+
+---
+
+# 10. File Transfer
+
+Implement secure bidirectional file transfer.
+
+Support:
+
+* Upload
+* Download
+* Multiple files
+* Folder selection
+* Progress
+* Cancel
+* Resume where technically appropriate
+* Transfer speed
+* Transfer size
+* Error handling
+* File name validation
+* Path validation
+
+Never allow arbitrary path traversal.
+
+Do not allow the remote side to silently write files into protected system directories.
+
+Customer must have appropriate visibility and control over file transfers.
+
+---
+
+# 11. Chat
+
+Implement a lightweight real-time chat during an active support session.
+
+Messages should include:
+
+* timestamp
+* sender
+* message
+* delivery state
+
+---
+
+# 12. Authentication
+
+Support Agent authentication must be significantly stronger than Customer Agent authentication.
+
+Implement:
+
+* User accounts
+* Password hashing
+* Role-based access control
+* Access tokens
+* Refresh tokens
+* Session expiration
+* Device/session management
+* Logout
+* Optional MFA architecture
+* Audit logging
+
+Never store plaintext passwords.
+
+Never put permanent secrets inside the Customer Agent executable.
+
+---
+
+# 13. Security
+
+Security is a first-class requirement.
+
+All communication must use encryption.
+
+Use TLS for server communication.
+
+Remote session traffic must be authenticated and encrypted.
+
+Design against:
+
+* Man-in-the-middle attacks
+* Session hijacking
+* Unauthorized remote access
+* Replay attacks
+* Token theft
+* Brute force
+* Path traversal
+* Arbitrary file execution
+* Privilege escalation
+* Unauthorized session creation
+
+Customer must explicitly approve remote access.
+
+The server must verify that a Support Agent is authorized to initiate the requested session.
+
+Every support session must have an auditable identity.
+
+---
+
+# 14. Support Authorization
+
+The server must distinguish between:
+
+SUPPORT_AGENT
+
+CUSTOMER_AGENT
+
+A Customer Agent must never be able to impersonate a Support Agent simply by modifying its local configuration.
+
+Authorization must be enforced server-side.
+
+Do not rely only on hidden UI buttons or client-side restrictions.
+
+---
+
+# 15. Windows Service
+
+Where appropriate, separate the user interface from privileged/background functionality.
+
+Consider:
+
+Customer Agent UI
++
+Windows background service
+
+The service should handle functionality that requires elevated/background execution.
+
+Do not request Administrator privileges unnecessarily.
+
+Follow Windows security best practices.
+
+---
+
+# 16. Installer
+
+Create professional Windows installers for both applications.
+
+Support Agent:
+
+Private/internal installer.
+
+Customer Agent:
+
+Public installer/download.
+
+Requirements:
+
+* Clean installation
+* Clean uninstall
+* Versioning
+* Upgrade support
+* Optional auto-update architecture
+* Code signing architecture
+* Proper application metadata
+* Windows Firewall considerations
+* Logging
+* Crash handling
+
+The Customer Agent should not look suspicious or behave like malware.
+
+All remote access must be clearly disclosed to the user.
+
+---
+
+# 17. UI
+
+Use a professional enterprise UI.
+
+Support Agent should have:
+
+* Login
+* Dashboard
+* Customer/Session list
+* Connect dialog
+* Active remote session window
+* File transfer panel
+* Chat panel
+* Session information
+* Settings
+* Logs
+
+Customer Agent should have a very simple UI:
+
+* Company branding
+* Support ID
+* Connection status
+* Accept/Reject request
+* Active session information
+* Disconnect
+* File transfer status
+* Chat
+
+The UI must support:
+
+* English
+* Persian
+* RTL for Persian
+
+Use a centralized localization system.
+
+Do not hard-code user-facing Persian/English strings throughout the code.
+
+---
+
+# 18. Architecture
+
+Use Clean Architecture principles where they provide real value.
+
+Recommended separation:
+
+/src
+
+/Server
+/Api
+/Application
+/Domain
+/Infrastructure
+
+/SupportAgent
+/Presentation
+/Application
+/Domain
+/Infrastructure
+
+/CustomerAgent
+/Presentation
+/Application
+/Domain
+/Infrastructure
+
+/Shared
+/Contracts
+/Networking
+/Security
+
+Do not create unnecessary abstractions.
+
+Keep domain logic separated from UI.
+
+Use dependency injection.
+
+Use async APIs.
+
+Use cancellation tokens.
+
+Use structured logging.
+
+Use configuration instead of hard-coded values.
+
+---
+
+# 19. Observability
+
+Implement structured logging.
+
+Log important events such as:
+
+* Authentication
+* Connection request
+* Connection accepted
+* Connection rejected
+* Session started
+* Session ended
+* File transfer started
+* File transfer completed
+* File transfer failed
+* Errors
+* Security events
+
+Never log:
+
+* Passwords
+* Access tokens
+* Private keys
+* Sensitive clipboard contents
+* File contents
+
+---
+
+# 20. Server Administration
+
+Create an administrator capability for our company.
+
+Admin should be able to:
+
+* Create support users
+* Disable support users
+* Assign roles
+* View active sessions
+* Terminate sessions
+* View audit logs
+* View connected customer agents
+* Revoke sessions/tokens
+* Configure system settings
+
+---
+
+# 21. Anti-Abuse Requirements
+
+This application is for legitimate internal customer support.
+
+It must NOT implement stealth remote access.
+
+Do not implement:
+
+* Hidden remote access
+* Undisclosed persistence
+* Credential theft
+* Keylogging
+* Webcam spying
+* Microphone spying
+* Antivirus bypass
+* UAC bypass
+* Security software evasion
+* Invisible installation
+* Undetectable execution
+
+Remote access must be visible and authorized by the customer.
+
+---
+
+# 22. Development Method
+
+This is extremely important.
+
+Do NOT attempt to build the entire application in one step.
+
+Work in phases.
+
+Before writing substantial code:
+
+1. Inspect the repository.
+2. Create the architecture.
+3. Create a detailed implementation plan.
+4. Create the solution and projects.
+5. Make sure everything compiles.
+6. Implement one subsystem at a time.
+7. Run tests after every meaningful phase.
+8. Fix compilation errors immediately.
+9. Fix runtime errors before continuing.
+10. Never leave TODO placeholders for core functionality.
+
+Do not give me pseudo-code for core features.
+
+Implement real, buildable code.
+
+---
+
+# 23. Required Development Phases
+
+Phase 1:
+Architecture and repository structure.
+
+Phase 2:
+Backend foundation.
+
+Phase 3:
+Database and authentication.
+
+Phase 4:
+Support Agent foundation.
+
+Phase 5:
+Customer Agent foundation.
+
+Phase 6:
+Support ID and session establishment.
+
+Phase 7:
+Signaling.
+
+Phase 8:
+Secure peer-to-peer communication.
+
+Phase 9:
+Relay server.
+
+Phase 10:
+Remote screen capture and streaming.
+
+Phase 11:
+Remote mouse and keyboard.
+
+Phase 12:
+Clipboard synchronization.
+
+Phase 13:
+File transfer.
+
+Phase 14:
+Chat.
+
+Phase 15:
+Multi-monitor support.
+
+Phase 16:
+Session management.
+
+Phase 17:
+Administration and audit logs.
+
+Phase 18:
+Windows services.
+
+Phase 19:
+Installers.
+
+Phase 20:
+Auto-update architecture.
+
+Phase 21:
+Security hardening.
+
+Phase 22:
+Performance optimization.
+
+Phase 23:
+Automated testing.
+
+Phase 24:
+Production deployment.
+
+---
+
+# 24. Important Rule
+
+After completing each phase:
+
+* Build the solution.
+* Run automated tests.
+* Run relevant integration tests.
+* Inspect logs.
+* Fix all errors.
+* Explain briefly what was implemented.
+* Explain what files were changed.
+* Only then move to the next phase.
+
+If something fails, STOP and fix it before continuing.
+
+Do not hide errors.
+
+Do not say "this should work" without actually building/testing it.
+
+---
+
+# 25. Production Quality
+
+The final product must be suitable for actual company use.
+
+Prioritize:
+
+* Security
+* Reliability
+* Low latency
+* Low bandwidth consumption
+* Maintainability
+* Logging
+* Error recovery
+* Clean architecture
+* Upgradeability
+* Windows compatibility
+* Good UX
+
+Do not optimize for the shortest implementation.
+
+Optimize for a maintainable production system.
+
+---
+
+# 26. First Task
+
+Do NOT start implementing the entire application immediately.
+
+First:
+
+1. Inspect the current repository.
+2. Determine whether it is empty or contains an existing project.
+3. Propose the final architecture.
+4. Explain the communication architecture.
+5. Explain the security model.
+6. Explain how P2P and relay will work.
+7. Explain the responsibilities of Support Agent, Customer Agent and Server.
+8. Define the database entities.
+9. Define the solution/project structure.
+10. Create an implementation roadmap.
+
+Then wait for approval before starting Phase 1 implementation.

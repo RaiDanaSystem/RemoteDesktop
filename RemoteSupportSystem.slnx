@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CustomerAgent/CustomerAgent.csproj" />
+    <Project Path="src/Shared/Shared.csproj" />
+    <Project Path="src/SupportAgent/SupportAgent.csproj" />
+  </Folder>
+  <Folder Name="/src/Server/">
+    <Project Path="src/Server/Api/Api.csproj" />
+    <Project Path="src/Server/Application/Application.csproj" />
+    <Project Path="src/Server/Domain/Domain.csproj" />
+    <Project Path="src/Server/Infrastructure/Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Server.Tests/">
+    <Project Path="tests/Server.Tests/Tests.csproj" />
+  </Folder>
+</Solution>

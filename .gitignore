@@ -90,6 +90,13 @@ artifacts/
 .env.*
 !.env.example
 
+## Local databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
 ## Installers / packaging output
 installer/output/
 installer/bin/

@@ -30,6 +30,7 @@
             android:textSize="16sp" />
 
         <LinearLayout
+            android:id="@+id/form"
             android:layout_width="480dp"
             android:layout_height="wrap_content"
             android:orientation="vertical">
@@ -40,22 +41,6 @@
                 android:hint="@string/hint_server"
                 android:imeOptions="actionNext|flagNoExtractUi"
                 android:inputType="textUri"
-                android:nextFocusDown="@+id/user" />
-
-            <EditText
-                android:id="@+id/user"
-                style="@style/Field"
-                android:hint="@string/hint_user"
-                android:imeOptions="actionNext|flagNoExtractUi"
-                android:inputType="text"
-                android:nextFocusDown="@+id/pass" />
-
-            <EditText
-                android:id="@+id/pass"
-                style="@style/Field"
-                android:hint="@string/hint_pass"
-                android:imeOptions="actionNext|flagNoExtractUi"
-                android:inputType="textPassword"
                 android:nextFocusDown="@+id/code" />
 
             <EditText

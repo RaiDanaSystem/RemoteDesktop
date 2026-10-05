@@ -10,7 +10,8 @@ with hardware H.264 decoding (JPEG-tile fallback), while sending mouse / keyboar
 1. Start the server (`src/Server/Api`) and the **CustomerAgent** on the PC; note the support code.
 2. In the PC's CustomerAgent, make sure remote input is allowed if you want to control the PC.
 3. On the TV open **Remote Desktop TV** and enter:
-   server address (e.g. `192.168.1.10:5096`), a SupportAgent/Admin account, and the support code.
+   the server address (e.g. `192.168.1.10:5096`) and the support code. The built-in support account
+   (`Config.kt`, same defaults as the Windows SupportAgent `appsettings.json`) is used automatically.
 4. Accept the connection on the PC. The desktop appears on the TV.
 
 ### Remote control
@@ -24,6 +25,9 @@ with hardware H.264 decoding (JPEG-tile fallback), while sending mouse / keyboar
 | Green | Toggle scroll mode (Up/Down scroll the page) |
 | Yellow | Type text on the PC (works with Persian too) |
 | CH+/CH− / Page Up/Down / FF/REW | Scroll |
+
+On a **phone/tablet** the same app switches to touch controls: tap = click, double-tap = double click,
+long-press = right click, drag = move pointer, two-finger drag = scroll, ☰ = menu, ⌨ = type text.
 
 USB/Bluetooth keyboards and mice work as well (a keyboard is forwarded to the PC as typing).
 

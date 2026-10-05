@@ -3,9 +3,7 @@
     <string name="app_name">ریموت دسکتاپ تی‌وی</string>
     <string name="title">ریموت دسکتاپ</string>
     <string name="subtitle">تصویر کامپیوتر ویندوزی را روی تلویزیون ببینید</string>
-    <string name="hint_server">سرور (مثال: 192.168.1.10:5096)</string>
-    <string name="hint_user">نام کاربری</string>
-    <string name="hint_pass">رمز عبور</string>
+    <string name="hint_server">آدرس سرور، دقیقاً مثل برنامه‌ی ویندوز</string>
     <string name="hint_code">کد پشتیبانی نمایش‌داده‌شده روی کامپیوتر</string>
     <string name="connect">اتصال</string>
     <string name="err_fill_all">همه‌ی فیلدها را پر کنید.</string>
@@ -40,4 +38,7 @@
     <string name="menu_close">بستن منو</string>
     <string name="type_hint">متنی که روی کامپیوتر تایپ می‌شود</string>
     <string name="send">ارسال</string>
+    <string name="hint_touch">تپ: کلیک · دوبار تپ: دابل کلیک · نگه‌داشتن: کلیک راست · کشیدن: حرکت نشانگر · دو انگشت: اسکرول · ☰: منو</string>
+    <string name="menu_drag_on">حالت درگ: روشن (کشیدن انگشت = نگه‌داشتن کلیک چپ)</string>
+    <string name="menu_drag_off">حالت درگ: خاموش</string>
 </resources>

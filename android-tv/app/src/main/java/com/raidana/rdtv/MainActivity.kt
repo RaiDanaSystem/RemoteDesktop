@@ -13,8 +13,6 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     private lateinit var server: EditText
-    private lateinit var user: EditText
-    private lateinit var pass: EditText
     private lateinit var code: EditText
     private lateinit var error: TextView
 
@@ -22,15 +20,11 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         server = findViewById(R.id.server)
-        user = findViewById(R.id.user)
-        pass = findViewById(R.id.pass)
         code = findViewById(R.id.code)
         error = findViewById(R.id.error)
 
         val prefs = getSharedPreferences("rdtv", Context.MODE_PRIVATE)
         server.setText(prefs.getString("server", ""))
-        user.setText(prefs.getString("user", ""))
-        pass.setText(prefs.getString("pass", ""))
 
         val connect = findViewById<Button>(R.id.connect)
         connect.setOnClickListener { start() }
@@ -40,30 +34,27 @@ class MainActivity : Activity() {
             } else false
         }
         // Jump to the field that still needs input.
-        when {
-            server.text.isBlank() -> server.requestFocus()
-            user.text.isBlank() -> user.requestFocus()
-            pass.text.isBlank() -> pass.requestFocus()
-            else -> code.requestFocus()
-        }
+        if (server.text.isBlank()) server.requestFocus() else code.requestFocus()
+
+        // Phones: form fills the width; TV: fixed comfortable column.
+        val form = findViewById<android.view.View>(R.id.form)
+        val screenDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val widthDp = minOf(480f, screenDp - 32f)
+        form.layoutParams = form.layoutParams.apply { width = (widthDp * resources.displayMetrics.density).toInt() }
     }
 
     private fun start() {
         val s = server.text.toString().trim()
-        val u = user.text.toString().trim()
-        val p = pass.text.toString()
         val c = code.text.toString().trim()
-        if (s.isEmpty() || u.isEmpty() || p.isEmpty() || c.isEmpty()) {
+        if (s.isEmpty() || c.isEmpty()) {
             error.text = getString(R.string.err_fill_all)
             return
         }
         error.text = ""
         getSharedPreferences("rdtv", Context.MODE_PRIVATE).edit()
-            .putString("server", s).putString("user", u).putString("pass", p).apply()
+            .putString("server", s).apply()
         val i = Intent(this, SessionActivity::class.java)
             .putExtra(SessionActivity.EXTRA_SERVER, s)
-            .putExtra(SessionActivity.EXTRA_USER, u)
-            .putExtra(SessionActivity.EXTRA_PASS, p)
             .putExtra(SessionActivity.EXTRA_CODE, c)
         @Suppress("DEPRECATION")
         startActivityForResult(i, 1)

@@ -3,9 +3,7 @@
     <string name="app_name">Remote Desktop TV</string>
     <string name="title">Remote Desktop</string>
     <string name="subtitle">Show your Windows PC on this TV</string>
-    <string name="hint_server">Server (e.g. 192.168.1.10:5096)</string>
-    <string name="hint_user">Username</string>
-    <string name="hint_pass">Password</string>
+    <string name="hint_server">Server address, exactly as in the PC app</string>
     <string name="hint_code">Support code shown on the PC</string>
     <string name="connect">Connect</string>
     <string name="err_fill_all">Please fill in all fields.</string>
@@ -40,4 +38,7 @@
     <string name="menu_close">Close menu</string>
     <string name="type_hint">Text to type on the PC</string>
     <string name="send">Send</string>
+    <string name="hint_touch">Tap: click · Double-tap: double click · Long-press: right click · Drag: move pointer · Two fingers: scroll · ☰: menu</string>
+    <string name="menu_drag_on">Drag mode: ON (finger drag holds left button)</string>
+    <string name="menu_drag_off">Drag mode: OFF</string>
 </resources>

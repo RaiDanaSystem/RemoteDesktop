@@ -10,7 +10,10 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.app.UiModeManager
+import android.content.res.Configuration
 import android.view.InputDevice
+import android.view.ViewConfiguration
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -89,6 +92,25 @@ class SessionActivity : Activity(), RtcSession.Listener {
     private var mouseDownButton = -1
     private var remoteCursor = false
 
+    // phone vs TV
+    private var isTv = false
+    private var dragMode = false
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var touchMoved = false
+    private var maxPointers = 0
+    private var longPressFired = false
+    private var lastTapAt = 0L
+    private var scrollAccum = 0f
+    private var lastScrollY = 0f
+    private var dragPressed = false
+    private val longPressRunnable = Runnable {
+        if (!touchMoved && maxPointers == 1 && !dragMode) {
+            longPressFired = true
+            click(Proto.BTN_RIGHT)
+        }
+    }
+
     private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -120,6 +142,17 @@ class SessionActivity : Activity(), RtcSession.Listener {
         menuPanel = findViewById(R.id.menu_panel)
         menuList = findViewById(R.id.menu_list)
 
+        val uim = getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+        isTv = uim.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature("android.software.leanback")
+        if (!isTv) {
+            findViewById<View>(R.id.touch_bar).visibility = View.VISIBLE
+            findViewById<View>(R.id.btn_menu).setOnClickListener { showMenu() }
+            findViewById<View>(R.id.btn_keyboard).setOnClickListener { promptText() }
+        }
+        val panelW = minOf(dp(340), resources.displayMetrics.widthPixels)
+        menuPanel.layoutParams = menuPanel.layoutParams.apply { width = panelW }
+
         tiles = TileCanvas { screen.invalidateTiles() }
         screen.attachTiles(tiles)
 
@@ -141,10 +174,8 @@ class SessionActivity : Activity(), RtcSession.Listener {
         setStatus(getString(R.string.status_starting))
 
         val server = intent.getStringExtra(EXTRA_SERVER).orEmpty()
-        val user = intent.getStringExtra(EXTRA_USER).orEmpty()
-        val pass = intent.getStringExtra(EXTRA_PASS).orEmpty()
         val code = intent.getStringExtra(EXTRA_CODE).orEmpty()
-        net.execute { runFlow(server, user, pass, code) }
+        net.execute { runFlow(server, code) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -196,12 +227,12 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     // ----------------------------------------------------------------- connection flow
 
-    private fun runFlow(server: String, user: String, pass: String, code: String) {
+    private fun runFlow(server: String, code: String) {
         try {
             val a = Api(server)
             api = a
             post { setStatus(getString(R.string.status_login)) }
-            a.login(user, pass)
+            a.login(Config.SUPPORT_USERNAME, Config.SUPPORT_PASSWORD)
 
             post { setStatus(getString(R.string.status_connecting)) }
             val conn = a.connect(code)
@@ -288,7 +319,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             if (ended) return@post
             statusText.visibility = View.GONE
             hintText.visibility = View.VISIBLE
-            hintText.text = getString(R.string.hint_controls)
+            hintText.text = getString(if (isTv) R.string.hint_controls else R.string.hint_touch)
             ui.postDelayed({ hintText.visibility = View.GONE }, 9000)
             ui.postDelayed(statsTick, 1000)
         }
@@ -557,23 +588,25 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (menuVisible || !channelOpen) return super.onTouchEvent(e)
+        if (e.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) return handleMouse(e)
+        return handleFinger(e)
+    }
+
+    /** USB/BT mouse: buttons map 1:1. */
+    private fun handleMouse(e: MotionEvent): Boolean {
         val (nx, ny) = screen.toNormalized(e.x, e.y)
-        val isMouse = e.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 screen.setCursor(nx, ny)
-                mouseDownButton = if (isMouse) when {
+                mouseDownButton = when {
                     e.buttonState and MotionEvent.BUTTON_SECONDARY != 0 -> Proto.BTN_RIGHT
                     e.buttonState and MotionEvent.BUTTON_TERTIARY != 0 -> Proto.BTN_MIDDLE
                     else -> Proto.BTN_LEFT
-                } else Proto.BTN_LEFT
+                }
                 sendMove(true)
                 send(Proto.mouseButton(remoteX(), remoteY(), mouseDownButton, true))
             }
-            MotionEvent.ACTION_MOVE -> {
-                screen.setCursor(nx, ny)
-                sendMove()
-            }
+            MotionEvent.ACTION_MOVE -> { screen.setCursor(nx, ny); sendMove() }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 screen.setCursor(nx, ny)
                 if (mouseDownButton >= 0) send(Proto.mouseButton(remoteX(), remoteY(), mouseDownButton, false))
@@ -581,6 +614,82 @@ class SessionActivity : Activity(), RtcSession.Listener {
             }
         }
         return true
+    }
+
+    /**
+     * Touch scheme for phones: tap = click, double tap = double click, long press = right click,
+     * one-finger drag = move the pointer (or drag with the left button in drag mode),
+     * two-finger drag = scroll.
+     */
+    private fun handleFinger(e: MotionEvent): Boolean {
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchStartX = e.x; touchStartY = e.y
+                touchMoved = false; longPressFired = false; maxPointers = 1
+                scrollAccum = 0f
+                val (nx, ny) = screen.toNormalized(e.x, e.y)
+                screen.setCursor(nx, ny)
+                if (dragMode) {
+                    sendMove(true)
+                    send(Proto.mouseButton(remoteX(), remoteY(), Proto.BTN_LEFT, true))
+                    dragPressed = true
+                } else ui.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong())
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                maxPointers = maxOf(maxPointers, e.pointerCount)
+                ui.removeCallbacks(longPressRunnable)
+                lastScrollY = avgY(e)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (e.pointerCount >= 2) {
+                    touchMoved = true
+                    val y = avgY(e)
+                    scrollAccum += y - lastScrollY
+                    lastScrollY = y
+                    val step = 28f * resources.displayMetrics.density / 2f
+                    while (scrollAccum >= step) { wheel(120); scrollAccum -= step }
+                    while (scrollAccum <= -step) { wheel(-120); scrollAccum += step }
+                } else {
+                    if (!touchMoved && Math.hypot((e.x - touchStartX).toDouble(), (e.y - touchStartY).toDouble()) > slop) {
+                        touchMoved = true
+                        ui.removeCallbacks(longPressRunnable)
+                    }
+                    if (touchMoved && maxPointers == 1) {
+                        val (nx, ny) = screen.toNormalized(e.x, e.y)
+                        screen.setCursor(nx, ny)
+                        sendMove()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                ui.removeCallbacks(longPressRunnable)
+                val (nx, ny) = screen.toNormalized(e.x, e.y)
+                screen.setCursor(nx, ny)
+                if (dragPressed) {
+                    send(Proto.mouseButton(remoteX(), remoteY(), Proto.BTN_LEFT, false))
+                    dragPressed = false
+                } else if (!touchMoved && maxPointers == 1 && !longPressFired) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastTapAt < 320) { doubleClick(); lastTapAt = 0 }
+                    else { click(Proto.BTN_LEFT); lastTapAt = now }
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                ui.removeCallbacks(longPressRunnable)
+                if (dragPressed) {
+                    send(Proto.mouseButton(remoteX(), remoteY(), Proto.BTN_LEFT, false))
+                    dragPressed = false
+                }
+            }
+        }
+        return true
+    }
+
+    private fun avgY(e: MotionEvent): Float {
+        var sum = 0f
+        for (i in 0 until e.pointerCount) sum += e.getY(i)
+        return sum / e.pointerCount
     }
 
     override fun onGenericMotionEvent(e: MotionEvent): Boolean {
@@ -626,6 +735,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         item(getString(R.string.menu_right_click)) { click(Proto.BTN_RIGHT) }
         item(getString(R.string.menu_double_click)) { doubleClick() }
         item(getString(if (scrollMode) R.string.menu_scroll_off else R.string.menu_scroll_on)) { scrollMode = !scrollMode }
+        if (!isTv) item(getString(if (dragMode) R.string.menu_drag_off else R.string.menu_drag_on)) { dragMode = !dragMode }
         item(getString(R.string.menu_type)) { promptText() }
         item("Esc") { pressKey(VK.ESC) }
         item("Enter") { pressKey(VK.ENTER) }
@@ -691,8 +801,6 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     companion object {
         const val EXTRA_SERVER = "server"
-        const val EXTRA_USER = "user"
-        const val EXTRA_PASS = "pass"
         const val EXTRA_CODE = "code"
         const val EXTRA_ERROR = "error"
     }

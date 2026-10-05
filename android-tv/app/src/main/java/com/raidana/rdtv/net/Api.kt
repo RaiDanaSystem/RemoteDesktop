@@ -112,10 +112,8 @@ class Api(rawServerUrl: String) {
         fun normalize(raw: String): String {
             var s = raw.trim().trimEnd('/')
             if (s.isEmpty()) return s
+            // Use exactly what the user typed; only add a scheme when it is missing.
             if (!s.startsWith("http://") && !s.startsWith("https://")) s = "http://$s"
-            // Bare host or IP without port: default server port.
-            val afterScheme = s.substringAfter("://")
-            if (!afterScheme.contains(':') && !afterScheme.contains('/')) s += ":5096"
             return s
         }
     }

@@ -1,7 +1,7 @@
 #define MyAppName "Remote Support"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Remote Support"
-#define MyAppExeName "SupportAgent.exe"
+#define MyAppExeName "RexonRemote.exe"
 
 [Setup]
 AppId={{8F3C2A1E-9B47-4D6A-A1C0-7E5B91C4D201}

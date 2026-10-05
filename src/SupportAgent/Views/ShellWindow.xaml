@@ -57,7 +57,7 @@
                         Visibility="{Binding IsHome, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="32" Height="32" CornerRadius="8" ClipToBounds="True">
-                        <Image Source="/SupportAgent;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
+                        <Image Source="/RexonRemote;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding AppTitle}" FontWeight="SemiBold" FontSize="14"
@@ -104,7 +104,7 @@
                         <StackPanel VerticalAlignment="Center" Margin="48,40">
                             <Border Width="52" Height="52" CornerRadius="14" ClipToBounds="True" Margin="0,0,0,20"
                                     HorizontalAlignment="Left">
-                                <Image Source="/SupportAgent;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
+                                <Image Source="/RexonRemote;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
                             </Border>
                             <TextBlock Text="{Binding HomeHeadline}" FontSize="28" FontWeight="SemiBold"
                                        Foreground="White" TextWrapping="Wrap" Margin="0,0,0,12"/>

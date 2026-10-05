@@ -36,7 +36,7 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="24" Height="24" CornerRadius="6" ClipToBounds="True">
-                        <Image Source="/SupportAgent;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
+                        <Image Source="/RexonRemote;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
                     </Border>
                     <TextBlock Text="Rexon" FontWeight="SemiBold" FontSize="13" Margin="8,0,0,0"
                                Foreground="{StaticResource Brush.Text}" VerticalAlignment="Center"/>
@@ -66,7 +66,7 @@
                 <StackPanel VerticalAlignment="Center" Margin="48,40">
                     <Border Width="52" Height="52" CornerRadius="14" ClipToBounds="True" Margin="0,0,0,20"
                             HorizontalAlignment="Left">
-                        <Image Source="/SupportAgent;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
+                        <Image Source="/RexonRemote;component/Resources/rexon-icon.png" Stretch="UniformToFill"/>
                     </Border>
                     <TextBlock Text="{Binding LoginTitle}" FontSize="28" FontWeight="SemiBold"
                                Foreground="White" TextWrapping="Wrap" Margin="0,0,0,12"/>

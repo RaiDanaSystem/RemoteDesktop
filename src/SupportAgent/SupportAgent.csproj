@@ -9,7 +9,11 @@
     <ApplicationIcon>Resources\rexon.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>SupportAgent</RootNamespace>
-    <AssemblyName>SupportAgent</AssemblyName>
+    <AssemblyName>RexonRemote</AssemblyName>
+    <AssemblyTitle>RexonRemote</AssemblyTitle>
+    <Product>RexonRemote</Product>
+    <Description>RexonRemote</Description>
+    <AssemblyDescription>RexonRemote</AssemblyDescription>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 

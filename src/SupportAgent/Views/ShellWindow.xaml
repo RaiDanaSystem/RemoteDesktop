@@ -17,6 +17,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -68,7 +69,19 @@
             </DockPanel>
         </Border>
 
-        <Grid Grid.Row="1">
+        <!-- Shown whenever another computer is connected to this one -->
+        <Border Grid.Row="1" Background="#14332F" BorderBrush="#1F6B5E" BorderThickness="0,0,0,1" Padding="16,8"
+                Visibility="{Binding LanHostingActive, Converter={StaticResource BoolToVisibilityConverter}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="{Binding LanDisconnectLabel}" Style="{StaticResource Btn.Danger}"
+                        Command="{Binding StopLanSharingCommand}" Padding="16,6" FontSize="13"/>
+                <Ellipse Width="10" Height="10" Fill="{StaticResource Brush.Success}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding LanHostingText}" Foreground="#99F6E4" FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="2">
             <Grid Visibility="{Binding IsHome, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.05*"/>
@@ -219,7 +232,44 @@
                             Visibility="{Binding IsHome, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
         </Grid>
 
-        <Border Grid.RowSpan="2" Background="#CC070B14"
+        <Border Grid.RowSpan="3" Background="#CC070B14"
+                Visibility="{Binding ShowLanRequest, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border Background="{StaticResource Brush.Surface}" CornerRadius="16" Padding="28" Width="440"
+                    BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="{Binding LanRequestTitle}" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{StaticResource Brush.Text}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="{Binding LanRequestName}" FontSize="18" FontWeight="SemiBold"
+                                       Foreground="White" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding LanRequestDetail}" FontSize="13"
+                                       Foreground="{StaticResource Brush.Muted}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="{Binding LanRequestText}" Foreground="{StaticResource Brush.Muted}"
+                               FontSize="13" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding LanSeeScreenLabel}" Foreground="{StaticResource Brush.Warn}"
+                               FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                    <Button Content="{Binding LanAcceptLabel}" Style="{StaticResource Btn.Primary}"
+                            Command="{Binding AcceptLanControlCommand}" Height="44" Margin="0,0,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="{Binding LanViewOnlyLabel}" Style="{StaticResource Btn.Ghost}"
+                                Command="{Binding AcceptLanViewOnlyCommand}" Height="42"/>
+                        <Button Grid.Column="2" Content="{Binding LanRejectLabel}" Style="{StaticResource Btn.Danger}"
+                                Command="{Binding RejectLanCommand}" Height="42" FontSize="14"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <Border Grid.RowSpan="3" Background="#CC070B14"
                 Visibility="{Binding ShowSettings, Converter={StaticResource BoolToVisibilityConverter}}">
             <Border Background="{StaticResource Brush.Surface}" CornerRadius="16" Padding="28" Width="440"
                     BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"

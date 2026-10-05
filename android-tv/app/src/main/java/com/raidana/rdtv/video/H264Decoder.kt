@@ -84,10 +84,33 @@ class H264Decoder(
     private var waitingForKeyframe = true
 
     val rendered = AtomicLong()
+    val fed = AtomicLong()
+    val dropped = AtomicLong()
+    val errors = AtomicLong()
+
+    @Volatile var codecName = ""
+    @Volatile var lastError = ""
+
+    /** True after a stall: restart without the low-latency/priority/operating-rate hints (some SoCs choke on them). */
+    @Volatile var plainConfig = false
+        private set
+
+    fun fallbackToPlainConfig() {
+        plainConfig = true
+        restartRequested = true
+        lastError = "restart with plain decoder config"
+    }
+
+    /** Set by the output thread after a non-recoverable codec error; the next keyframe restarts the codec. */
+    @Volatile private var restartRequested = false
 
     /** Feed one access unit. Returns false when a keyframe is needed to continue. */
     @Synchronized
     fun feed(au: H264Assembler.AccessUnit): Boolean {
+        if (restartRequested) {
+            restartRequested = false
+            stopCodec()
+        }
         if (codec == null || au.width != width || au.height != height) {
             if (!au.keyframe) return false
             if (!startCodec(au)) return false
@@ -98,6 +121,7 @@ class H264Decoder(
             val idx = c.dequeueInputBuffer(8_000)
             if (idx < 0) {
                 waitingForKeyframe = true
+                dropped.incrementAndGet()
                 return false
             }
             val buf = c.getInputBuffer(idx) ?: return false
@@ -111,8 +135,11 @@ class H264Decoder(
             val flags = if (au.keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
             c.queueInputBuffer(idx, 0, au.annexB.size, System.nanoTime() / 1000, flags)
             if (au.keyframe) waitingForKeyframe = false
+            fed.incrementAndGet()
             return true
         } catch (e: Exception) {
+            lastError = "feed: ${e.javaClass.simpleName} ${e.message ?: ""}"
+            errors.incrementAndGet()
             stopCodec()
             return false
         }
@@ -126,18 +153,17 @@ class H264Decoder(
             if (sps != null) fmt.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
             if (pps != null) fmt.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
             fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 4 * 1024 * 1024)
-            if (Build.VERSION.SDK_INT >= 30) fmt.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
-            if (Build.VERSION.SDK_INT >= 23) {
-                fmt.setInteger(MediaFormat.KEY_PRIORITY, 0)
-                fmt.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
+            if (!plainConfig) {
+                if (Build.VERSION.SDK_INT >= 30) fmt.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+                if (Build.VERSION.SDK_INT >= 23) {
+                    fmt.setInteger(MediaFormat.KEY_PRIORITY, 0)
+                    fmt.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
+                }
             }
-            // Vendor hints for minimal buffering (ignored when unsupported).
-            try { fmt.setInteger("vendor.rtc-ext-dec-low-latency.enable", 1) } catch (_: Exception) {}
-            try { fmt.setInteger("low-latency", 1) } catch (_: Exception) {}
-
             val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             c.configure(fmt, surface, null, 0)
             c.start()
+            codecName = try { c.name } catch (_: Exception) { "?" }
             codec = c
             width = au.width
             height = au.height
@@ -147,6 +173,8 @@ class H264Decoder(
             onSizeKnown(au.width, au.height)
             true
         } catch (e: Exception) {
+            lastError = "start: ${e.javaClass.simpleName} ${e.message ?: ""}"
+            errors.incrementAndGet()
             codec = null
             onUnsupported(au.width, au.height)
             false
@@ -162,7 +190,17 @@ class H264Decoder(
                     c.releaseOutputBuffer(i, true)
                     rendered.incrementAndGet()
                 }
+            } catch (e: MediaCodec.CodecException) {
+                errors.incrementAndGet()
+                lastError = "codec: ${e.diagnosticInfo}"
+                if (!e.isTransient) { restartRequested = true; break }
             } catch (e: Exception) {
+                // stopCodec() racing with this thread is expected; anything else needs a restart.
+                if (running) {
+                    errors.incrementAndGet()
+                    lastError = "out: ${e.javaClass.simpleName} ${e.message ?: ""}"
+                    restartRequested = true
+                }
                 break
             }
         }

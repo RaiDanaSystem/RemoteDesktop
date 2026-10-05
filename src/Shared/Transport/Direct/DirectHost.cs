@@ -13,8 +13,20 @@ public sealed class DirectConnectionRequest
     public string Platform { get; init; } = string.Empty;
     public IPAddress RemoteAddress { get; init; } = IPAddress.None;
 
-    public void Accept(bool viewOnly = false) => _decision.TrySetResult((true, viewOnly, null));
-    public void Reject(string reason = "Rejected by the user") => _decision.TrySetResult((false, false, reason));
+    /// <summary>Raised once when the request was accepted, rejected or timed out.</summary>
+    public event Action? Decided;
+
+    public bool IsDecided => _decision.Task.IsCompleted;
+
+    public void Accept(bool viewOnly = false)
+    {
+        if (_decision.TrySetResult((true, viewOnly, null))) Decided?.Invoke();
+    }
+
+    public void Reject(string reason = "Rejected by the user")
+    {
+        if (_decision.TrySetResult((false, false, reason))) Decided?.Invoke();
+    }
 
     internal Task<(bool Accepted, bool ViewOnly, string? Reason)> Decision => _decision.Task;
 }
@@ -129,6 +141,7 @@ public sealed class DirectHost : IDisposable
                 var winner = await Task.WhenAny(decisionTask, Task.Delay(DecisionTimeout, _cts.Token));
                 if (winner != decisionTask)
                 {
+                    request.Reject("no answer");
                     await stream.WriteAsync(DirectProtocol.FrameJson(DirectProtocol.TagReject, new RejectMessage { Reason = "no answer" }), _cts.Token);
                     return;
                 }

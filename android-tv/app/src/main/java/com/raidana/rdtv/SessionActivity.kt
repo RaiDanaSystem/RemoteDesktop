@@ -59,6 +59,11 @@ class SessionActivity : Activity(), RtcSession.Listener {
     @Volatile private var rtc: Link? = null
     private var unsupportedHandled = false
     private var maxWidth = 0
+    private var codecMode = "h264"
+    private var stuckSeconds = 0
+    private var lastFed = 0L
+    private var lastRenderedForWatchdog = 0L
+    private var tilesRequested = false
     private var sessionId: String? = null
 
     @Volatile private var ended = false
@@ -382,7 +387,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             ui.postDelayed({ hintText.visibility = View.GONE }, 9000)
             ui.postDelayed(statsTick, 1000)
         }
-        rtc?.send(Proto.streamSettings(fps, quality, maxWidth))
+        rtc?.send(Proto.streamSettings(fps, quality, maxWidth, codecMode))
         Thread {
             while (!ended && channelOpen) {
                 rtc?.send(Proto.ping())
@@ -477,12 +482,31 @@ class SessionActivity : Activity(), RtcSession.Listener {
         val fpsNow = ((rendered - lastRendered) + (tl - lastTiles)) / dt
         val mbps = (by - lastBytes) * 8 / dt / 1_000_000.0
         lastRendered = rendered; lastTiles = tl; lastBytes = by; lastStatsAt = now
+        val d = decoder
+        // Watchdog: access units are being fed but nothing reaches the screen → ask the PC for JPEG tiles.
+        if (d != null && codecMode == "h264") {
+            val fedNow = d.fed.get()
+            val r = d.rendered.get()
+            if (fedNow - lastFed >= 15 && r == lastRenderedForWatchdog) stuckSeconds++ else stuckSeconds = 0
+            lastFed = fedNow; lastRenderedForWatchdog = r
+            if (stuckSeconds == 3 && !d.plainConfig) {
+                log("H.264 output stalled → retry decoder without low-latency hints")
+                d.fallbackToPlainConfig()
+            }
+            if (stuckSeconds >= 8 && !tilesRequested) {
+                tilesRequested = true
+                log("H.264 output stalled (fed=$fedNow out=$r err=${d.errors.get()} ${d.lastError}) → compatibility mode")
+                setCompatibilityMode(true, auto = true)
+            }
+        }
         if (showStats) {
             statsText.visibility = View.VISIBLE
+            val dec = if (d != null && d.codecName.isNotEmpty()) "  ${d.codecName} in/out ${d.fed.get()}/${d.rendered.get()} drop ${d.dropped.get()} err ${d.errors.get()}" else ""
             statsText.text = String.format(
-                "%dx%d  %.0f fps  %.1f Mbit/s  ping %s",
-                streamW, streamH, fpsNow, mbps, if (rttMs >= 0) "$rttMs ms" else "—"
-            )
+                "%dx%d  %.0f fps  %.1f Mbit/s  ping %s  %s%s",
+                streamW, streamH, fpsNow, mbps, if (rttMs >= 0) "$rttMs ms" else "—",
+                if (codecMode == "tiles") "[JPEG]" else "[H.264]", dec
+            ) + (if (d != null && d.lastError.isNotEmpty()) "\n" + d.lastError else "")
         } else statsText.visibility = View.GONE
     }
 
@@ -822,6 +846,9 @@ class SessionActivity : Activity(), RtcSession.Listener {
         item(getString(R.string.menu_quality_max)) { applyQuality(30, 80, 1920) }
         item(getString(R.string.menu_quality_balanced)) { applyQuality(30, 60, 0) }
         item(getString(R.string.menu_quality_low)) { applyQuality(20, 40, 0) }
+        item(getString(if (codecMode == "tiles") R.string.menu_codec_h264 else R.string.menu_codec_tiles)) {
+            setCompatibilityMode(codecMode != "tiles", auto = false)
+        }
         item(getString(if (remoteCursor) R.string.menu_remote_cursor_off else R.string.menu_remote_cursor_on)) {
             remoteCursor = !remoteCursor
             send(Proto.showRemoteCursor(remoteCursor))
@@ -846,7 +873,16 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     private fun applyQuality(f: Int, q: Int, w: Int) {
         fps = f; quality = q; maxWidth = w
-        send(Proto.streamSettings(f, q, w))
+        send(Proto.streamSettings(f, q, w, codecMode))
+    }
+
+    /** Compatibility mode: the PC sends JPEG tiles instead of H.264 (software path, works everywhere). */
+    private fun setCompatibilityMode(on: Boolean, auto: Boolean) {
+        codecMode = if (on) "tiles" else "h264"
+        stuckSeconds = 0
+        if (!on) tilesRequested = false
+        send(Proto.streamSettings(fps, quality, maxWidth, codecMode))
+        flashHint(if (auto) R.string.hint_codec_auto else if (on) R.string.hint_codec_tiles else R.string.hint_codec_h264)
     }
 
     /** The TV's hardware decoder cannot handle the requested size (e.g. 4K): fall back to 1080p. */

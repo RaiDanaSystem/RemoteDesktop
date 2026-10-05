@@ -33,6 +33,12 @@ public class ScreenStreamingManager : IScreenStreamingManager
 
     /// <summary>True when frames go over a server-less LAN TCP channel (bigger send bursts, higher bitrates).</summary>
     public bool Direct { get; set; }
+
+    /// <summary>Viewer asked for JPEG tiles (compatibility mode) instead of H.264.</summary>
+    public bool PreferTiles { get; set; }
+
+    /// <summary>Encode H.264 with correct colors (for hardware-decoding viewers such as Android).</summary>
+    public bool CorrectColors { get; set; }
     public event Action<FrameData>? FrameCaptured;
     public event Action<string>? StreamingStateChanged;
 
@@ -253,7 +259,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
 
     private List<(FrameFormat Format, byte[] Bytes)>? TryEncodeH264(FrameData frame)
     {
-        if (_h264Unavailable)
+        if (_h264Unavailable || PreferTiles)
             return null;
 
         try
@@ -264,7 +270,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
                 _h264 = null;
             }
 
-            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality, frame.Width, frame.Height, Direct));
+            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality, frame.Width, frame.Height, Direct), correctColors: CorrectColors);
             if (frame.SequenceNumber == 1 || frame.SequenceNumber % Math.Max(_targetFps, 1) == 0)
                 _h264.RequestKeyframe();
             var annexB = _h264.EncodeBgra(frame.FrameBytes, frame.Width, frame.Height, out var keyframe);

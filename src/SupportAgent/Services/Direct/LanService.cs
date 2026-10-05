@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
 using CustomerAgent;
 using CustomerAgent.Services.Session;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,7 +32,6 @@ public sealed class LanService : IDisposable
     private DirectHost? _host;
     private RemoteDesktopSession? _hostSession;
     private IServiceProvider? _hostServices;
-    private Window? _banner;
     private bool _ending;
 
     public LanDiscovery? Discovery { get; private set; }
@@ -43,6 +41,12 @@ public sealed class LanService : IDisposable
     public bool IsHosting => _hostSession is not null;
 
     public event Action? HostingChanged;
+
+    /// <summary>A viewer wants to see this PC. The UI must call Accept/Reject on the request.</summary>
+    public event Action<DirectConnectionRequest>? IncomingRequest;
+
+    public string HostingViewerName { get; private set; } = string.Empty;
+    public bool HostingViewOnly { get; private set; }
 
     public bool SharingEnabled
     {
@@ -133,33 +137,14 @@ public sealed class LanService : IDisposable
             return;
         }
 
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null)
+        var handler = IncomingRequest;
+        if (handler is null)
         {
             request.Reject("Not available.");
             return;
         }
 
-        dispatcher.InvokeAsync(() =>
-        {
-            try
-            {
-                Application.Current.MainWindow?.Activate();
-                var text = string.Format(_loc.GetString("Lan_IncomingBody"), request.ViewerName, request.RemoteAddress);
-                var result = MessageBox.Show(text, _loc.GetString("Lan_IncomingTitle"),
-                    MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
-                switch (result)
-                {
-                    case MessageBoxResult.Yes: request.Accept(viewOnly: false); break;
-                    case MessageBoxResult.No: request.Accept(viewOnly: true); break;
-                    default: request.Reject("Rejected by the user."); break;
-                }
-            }
-            catch
-            {
-                request.Reject("Error.");
-            }
-        });
+        handler(request);
     }
 
     private void OnConnectionAccepted(object? sender, DirectAcceptedEventArgs e)
@@ -181,6 +166,8 @@ public sealed class LanService : IDisposable
             var session = provider.GetRequiredService<RemoteDesktopSession>();
             var manager = provider.GetRequiredService<WebRtcSessionManager>();
 
+            HostingViewerName = e.Request.ViewerName;
+            HostingViewOnly = e.ViewOnly;
             _hostServices = provider;
             _hostSession = session;
             session.SessionEnded += (_, _) => _ = EndHostingAsync(sendDisconnect: false);
@@ -190,7 +177,6 @@ public sealed class LanService : IDisposable
                 await session.PrepareSessionAsync(Guid.NewGuid());
                 session.SetInputConsent(!e.ViewOnly);
                 session.SetClipboardConsent(true);
-                ShowBanner(e.Request.ViewerName, e.ViewOnly);
             }).Task.Unwrap();
 
             HostingChanged?.Invoke();
@@ -227,16 +213,6 @@ public sealed class LanService : IDisposable
         }
         catch { }
 
-        try
-        {
-            Application.Current?.Dispatcher.Invoke(() =>
-            {
-                _banner?.Close();
-                _banner = null;
-            });
-        }
-        catch { }
-
         try { if (session is not null) await session.DisposeAsync(); } catch { }
         try
         {
@@ -246,54 +222,6 @@ public sealed class LanService : IDisposable
         catch { }
 
         HostingChanged?.Invoke();
-    }
-
-    private void ShowBanner(string viewerName, bool viewOnly)
-    {
-        var text = new TextBlock
-        {
-            Text = string.Format(_loc.GetString(viewOnly ? "Lan_BannerViewOnly" : "Lan_Banner"), viewerName),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        var stop = new Button
-        {
-            Content = _loc.GetString("Lan_StopSharing"),
-            Padding = new Thickness(12, 6, 12, 6)
-        };
-        stop.Click += async (_, _) => await StopHostingAsync();
-
-        var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(text);
-        panel.Children.Add(stop);
-
-        var work = SystemParameters.WorkArea;
-        var window = new Window
-        {
-            Title = "Rexon",
-            Content = panel,
-            Width = 340,
-            SizeToContent = SizeToContent.Height,
-            Topmost = true,
-            ShowInTaskbar = false,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStyle = WindowStyle.ToolWindow,
-            WindowStartupLocation = WindowStartupLocation.Manual,
-            Left = work.Right - 360,
-            Top = work.Bottom - 150,
-            FlowDirection = _loc.IsRtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight
-        };
-        // Closing the banner by the X button also ends the share (the user must always be able to stop it).
-        window.Closed += (_, _) =>
-        {
-            if (_banner == window)
-            {
-                _banner = null;
-                _ = EndHostingAsync(sendDisconnect: true);
-            }
-        };
-        _banner = window;
-        window.Show();
     }
 
     // ------------------------------------------------------------------ settings / firewall

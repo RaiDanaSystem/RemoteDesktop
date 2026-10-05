@@ -51,4 +51,9 @@
     <string name="lan_manual_hint">آدرس رایانه (مثلاً 192.168.1.20)</string>
     <string name="lan_connect">اتصال</string>
     <string name="server_section">یا از طریق سرور وصل شوید</string>
+    <string name="menu_codec_tiles">حالت سازگاری (JPEG، اگر تصویر سیاه/ثابت است)</string>
+    <string name="menu_codec_h264">بازگشت به H.264 (سریع)</string>
+    <string name="hint_codec_auto">دیکودر ویدیو گیر کرد — به حالت سازگاری رفت</string>
+    <string name="hint_codec_tiles">حالت سازگاری (JPEG)</string>
+    <string name="hint_codec_h264">حالت H.264</string>
 </resources>

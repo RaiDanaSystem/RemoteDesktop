@@ -11,8 +11,15 @@ public sealed class OpenH264Encoder : IDisposable
     private readonly int _bitrate;
     private bool _forceKeyframe = true;
 
-    public OpenH264Encoder(int width, int height, int fps = 15, int bitrate = 1_500_000)
+    private readonly bool _correctColors;
+
+    /// <param name="correctColors">
+    /// The captured frames are BGRA. The legacy stream labels them RGBA (red/blue swapped; the Windows viewer
+    /// compensates when decoding). Viewers that decode with a hardware codec ask for correct colors instead.
+    /// </param>
+    public OpenH264Encoder(int width, int height, int fps = 15, int bitrate = 1_500_000, bool correctColors = false)
     {
+        _correctColors = correctColors;
         _fps = Math.Clamp(fps, 5, 60);
         _bitrate = Math.Clamp(bitrate, 250_000, 80_000_000);
         Reconfigure(Align16(width), Align16(height));
@@ -45,7 +52,7 @@ public sealed class OpenH264Encoder : IDisposable
             keyframe = true;
         }
 
-        var image = new ImageData(ImageType.Rgba, width, height, width * 4, bgra);
+        var image = new ImageData(_correctColors ? ImageType.Bgra : ImageType.Rgba, width, height, width * 4, bgra);
         if (!_encoder.Encode(image, out EncodedData[]? nalus) || nalus is null || nalus.Length == 0)
             return null;
 

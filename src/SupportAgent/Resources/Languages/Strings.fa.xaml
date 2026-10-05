@@ -146,4 +146,11 @@
     <system:String x:Key="Lan_StartFailed">حالت شبکه محلی راه‌اندازی نشد.</system:String>
     <system:String x:Key="Session_StreamResolution">وضوح</system:String>
 
+    <system:String x:Key="Lan_RequestTitle">درخواست اتصال</system:String>
+    <system:String x:Key="Lan_RequestText">می‌خواهد به این رایانه وصل شود.</system:String>
+    <system:String x:Key="Lan_SeeScreen">او می‌تواند صفحه‌ی شما را ببیند</system:String>
+    <system:String x:Key="Lan_AcceptControl">قبول (مشاهده و کنترل)</system:String>
+    <system:String x:Key="Lan_ViewOnly">فقط مشاهده</system:String>
+    <system:String x:Key="Lan_Reject">رد کردن</system:String>
+    <system:String x:Key="Lan_Disconnect">قطع اتصال</system:String>
 </ResourceDictionary>

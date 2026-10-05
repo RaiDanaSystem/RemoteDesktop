@@ -51,4 +51,9 @@
     <string name="lan_manual_hint">PC address (e.g. 192.168.1.20)</string>
     <string name="lan_connect">Connect</string>
     <string name="server_section">Or connect through a server</string>
+    <string name="menu_codec_tiles">Compatibility mode (JPEG, if video is black/frozen)</string>
+    <string name="menu_codec_h264">Back to H.264 (fast)</string>
+    <string name="hint_codec_auto">Video decoder stalled — switched to compatibility mode</string>
+    <string name="hint_codec_tiles">Compatibility mode (JPEG tiles)</string>
+    <string name="hint_codec_h264">H.264 mode</string>
 </resources>

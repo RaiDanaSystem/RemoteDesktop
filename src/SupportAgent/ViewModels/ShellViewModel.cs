@@ -6,6 +6,7 @@ using CustomerAgent.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RemoteSupport.Shared;
+using RemoteSupport.Shared.Transport.Direct;
 using SupportAgent.Configuration;
 using SupportAgent.Models;
 using SupportAgent.Services.Direct;
@@ -24,6 +25,13 @@ public partial class ShellViewModel : ViewModelBase
     private readonly string _supportPassword;
     private readonly LanService _lan;
     private bool _modeTitleIsLan;
+    private DirectConnectionRequest? _lanRequest;
+
+    [ObservableProperty] private bool _showLanRequest;
+    [ObservableProperty] private string _lanRequestName = string.Empty;
+    [ObservableProperty] private string _lanRequestDetail = string.Empty;
+    [ObservableProperty] private bool _lanHostingActive;
+    [ObservableProperty] private string _lanHostingText = string.Empty;
 
     private Action? _customerLanguageSync;
     private IServiceProvider? _modeServices;
@@ -51,6 +59,13 @@ public partial class ShellViewModel : ViewModelBase
     public string CustomerCardBody => _localization.GetString("Shell_CustomerBody");
     public string LanCardTitle => _localization.GetString("Shell_LanTitle");
     public string LanCardBody => _localization.GetString("Shell_LanBody");
+    public string LanRequestTitle => _localization.GetString("Lan_RequestTitle");
+    public string LanRequestText => _localization.GetString("Lan_RequestText");
+    public string LanSeeScreenLabel => _localization.GetString("Lan_SeeScreen");
+    public string LanAcceptLabel => _localization.GetString("Lan_AcceptControl");
+    public string LanViewOnlyLabel => _localization.GetString("Lan_ViewOnly");
+    public string LanRejectLabel => _localization.GetString("Lan_Reject");
+    public string LanDisconnectLabel => _localization.GetString("Lan_Disconnect");
     public string LanShareLabel => string.Format(_localization.GetString("Lan_ShareToggle"), Environment.MachineName);
 
     public bool LanSharingEnabled
@@ -78,6 +93,8 @@ public partial class ShellViewModel : ViewModelBase
         LanService lan)
     {
         _lan = lan;
+        _lan.IncomingRequest += OnLanIncomingRequest;
+        _lan.HostingChanged += OnLanHostingChanged;
         _localization = localization;
         _endpointStore = endpointStore;
         _loggerFactory = loggerFactory;
@@ -154,6 +171,79 @@ public partial class ShellViewModel : ViewModelBase
             IsBusy = false;
         }
     }
+
+    private void OnLanIncomingRequest(DirectConnectionRequest request)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            request.Reject("Not available.");
+            return;
+        }
+
+        dispatcher.InvokeAsync(() =>
+        {
+            _lanRequest = request;
+            LanRequestName = request.ViewerName;
+            LanRequestDetail = $"{request.Platform} · {request.RemoteAddress}";
+            ShowLanRequest = true;
+            OnPropertyChanged(nameof(LanRequestTitle));
+            OnPropertyChanged(nameof(LanRequestText));
+
+            // Closed automatically when answered elsewhere or timed out.
+            request.Decided += () => dispatcher.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_lanRequest, request))
+                {
+                    _lanRequest = null;
+                    ShowLanRequest = false;
+                }
+            });
+
+            var window = Application.Current.MainWindow;
+            if (window is not null)
+            {
+                if (window.WindowState == WindowState.Minimized)
+                    window.WindowState = WindowState.Normal;
+                window.Show();
+                window.Activate();
+            }
+        });
+    }
+
+    private void OnLanHostingChanged()
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            LanHostingActive = _lan.IsHosting;
+            LanHostingText = _lan.IsHosting
+                ? string.Format(_localization.GetString(_lan.HostingViewOnly ? "Lan_BannerViewOnly" : "Lan_Banner"), _lan.HostingViewerName)
+                : string.Empty;
+            OnPropertyChanged(nameof(LanDisconnectLabel));
+        });
+    }
+
+    [RelayCommand]
+    private void AcceptLanControl() => AnswerLan(viewOnly: false, accept: true);
+
+    [RelayCommand]
+    private void AcceptLanViewOnly() => AnswerLan(viewOnly: true, accept: true);
+
+    [RelayCommand]
+    private void RejectLan() => AnswerLan(viewOnly: false, accept: false);
+
+    private void AnswerLan(bool viewOnly, bool accept)
+    {
+        var request = _lanRequest;
+        _lanRequest = null;
+        ShowLanRequest = false;
+        if (request is null) return;
+        if (accept) request.Accept(viewOnly);
+        else request.Reject("Rejected by the user.");
+    }
+
+    [RelayCommand]
+    private async Task StopLanSharingAsync() => await _lan.StopHostingAsync();
 
     /// <summary>Server-less mode: list the PCs on this network and connect directly (no login, no server).</summary>
     [RelayCommand]

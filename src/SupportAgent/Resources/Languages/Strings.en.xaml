@@ -146,4 +146,11 @@
     <system:String x:Key="Lan_StartFailed">Local network mode could not start.</system:String>
     <system:String x:Key="Session_StreamResolution">Resolution</system:String>
 
+    <system:String x:Key="Lan_RequestTitle">Connection request</system:String>
+    <system:String x:Key="Lan_RequestText">wants to connect to this computer.</system:String>
+    <system:String x:Key="Lan_SeeScreen">They will be able to see your screen</system:String>
+    <system:String x:Key="Lan_AcceptControl">Accept (view &amp; control)</system:String>
+    <system:String x:Key="Lan_ViewOnly">View only</system:String>
+    <system:String x:Key="Lan_Reject">Reject</system:String>
+    <system:String x:Key="Lan_Disconnect">Disconnect</system:String>
 </ResourceDictionary>

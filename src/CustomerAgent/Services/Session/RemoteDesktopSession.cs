@@ -532,6 +532,20 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             }
         }
 
+        if (control.Metadata is not null && _screenStreaming is not null
+            && control.Metadata.TryGetValue("ColorFix", out var colorFix))
+        {
+            _screenStreaming.CorrectColors = colorFix == "1";
+        }
+
+        if (control.Metadata is not null && control.Metadata.TryGetValue("Codec", out var codec) && _screenStreaming is not null)
+        {
+            var tiles = string.Equals(codec, "tiles", StringComparison.OrdinalIgnoreCase);
+            if (_screenStreaming.PreferTiles != tiles)
+                Log($"Viewer requested {(tiles ? "JPEG tiles (compatibility mode)" : "H.264")}");
+            _screenStreaming.PreferTiles = tiles;
+        }
+
         if (fps.HasValue)
             _streamFps = Math.Clamp(fps.Value, 5, 60);
         if (quality.HasValue)

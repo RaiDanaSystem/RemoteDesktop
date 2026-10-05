@@ -158,4 +158,5 @@
     <system:String x:Key="Sound_Here">Play here</system:String>
     <system:String x:Key="Sound_HereMute">Play here, mute remote PC</system:String>
     <system:String x:Key="Lan_MuteToggle">While someone views this PC with sound, play the sound only on the viewer (mute this PC's speakers)</system:String>
+    <system:String x:Key="Lan_MuteUnsupported">Sound plays on both PCs: this audio driver cannot mute the speakers without silencing the stream</system:String>
 </ResourceDictionary>

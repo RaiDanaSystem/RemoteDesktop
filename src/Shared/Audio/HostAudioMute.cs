@@ -51,6 +51,35 @@ public static class HostAudioMute
         }
     }
 
+    /// <summary>
+    /// Peak (0..1) of what applications are currently playing, measured per audio session (before the endpoint mute).
+    /// Used to tell "the stream went silent because nothing is playing" from "the driver silenced the stream".
+    /// </summary>
+    public static double PlaybackActivity()
+    {
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            var sessions = device.AudioSessionManager.Sessions;
+            double peak = 0;
+            for (var i = 0; i < sessions.Count; i++)
+            {
+                try
+                {
+                    var p = sessions[i].AudioMeterInformation.MasterPeakValue;
+                    if (p > peak) peak = p;
+                }
+                catch { }
+            }
+            return peak;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     public static void Restore()
     {
         lock (Gate)

@@ -230,6 +230,7 @@ public partial class ShellViewModel : ViewModelBase
             LanHostingActive = _lan.IsHosting;
             LanHostingText = _lan.IsHosting
                 ? string.Format(_localization.GetString(_lan.HostingViewOnly ? "Lan_BannerViewOnly" : "Lan_Banner"), _lan.HostingViewerName)
+                  + (_lan.MuteUnsupported ? "  ·  " + _localization.GetString("Lan_MuteUnsupported") : string.Empty)
                 : string.Empty;
             OnPropertyChanged(nameof(LanDisconnectLabel));
         });

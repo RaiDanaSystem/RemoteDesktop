@@ -117,7 +117,10 @@ public sealed class OpenH264Encoder : IDisposable
         try
         {
             var p = _encoder!.GetDefaultParameters();
-            var threads = (ushort)Math.Clamp(Environment.ProcessorCount, 1, width * height >= 1920 * 1080 ? 8 : 4);
+            // Use only as many threads as the picture size justifies: more threads at small sizes just burns power.
+            var pixels = (long)width * height;
+            var wanted = pixels >= 3_000_000 ? 6 : pixels >= 1_500_000 ? 4 : 2;
+            var threads = (ushort)Math.Clamp(Math.Min(Environment.ProcessorCount, wanted), 1, 8);
 
             p.iUsageType = EUsageType.SCREEN_CONTENT_REAL_TIME;
             p.iPicWidth = width;

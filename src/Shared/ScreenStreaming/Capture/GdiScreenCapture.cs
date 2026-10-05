@@ -22,6 +22,26 @@ public class GdiScreenCapture : IScreenCapture
     }
     private int _loggedErrors;
 
+    // Frame buffers are huge at 4K (33 MB); recycling them avoids a GC storm and a lot of CPU/heat.
+    private readonly System.Collections.Concurrent.ConcurrentBag<byte[]> _bufferPool = new();
+    private Bitmap? _stretchBitmap;
+
+    /// <summary>Gives a raw frame buffer back once it has been encoded.</summary>
+    public void Recycle(byte[]? buffer)
+    {
+        if (buffer is not null && _bufferPool.Count < 3)
+            _bufferPool.Add(buffer);
+    }
+
+    private byte[] RentBuffer(int length)
+    {
+        while (_bufferPool.TryTake(out var b))
+        {
+            if (b.Length == length) return b;
+        }
+        return new byte[length];
+    }
+
     public GdiScreenCapture(ILogger? logger = null, int maxWidth = 1280)
     {
         _logger = logger;
@@ -81,10 +101,10 @@ public class GdiScreenCapture : IScreenCapture
                 var fastScale = _maxWidth / (double)monitor.Width;
                 var fw = Math.Max(16, (int)(monitor.Width * fastScale) & ~15);
                 var fh = Math.Max(16, (int)(monitor.Height * fastScale) & ~15);
-                using var fast = CaptureScaledViaStretch(monitor, fw, fh);
+                var fast = CaptureScaledViaStretch(monitor, fw, fh);
                 if (fast is not null)
                 {
-                    var fastPixels = CopyBgra(fast);
+                    var fastPixels = CopyBgra(fast, RentBuffer(fw * fh * 4));
                     ForceOpaque(fastPixels);
                     _frameSequence++;
                     return Task.FromResult<FrameData?>(new FrameData
@@ -175,16 +195,21 @@ public class GdiScreenCapture : IScreenCapture
         return Task.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync() => await StopCaptureAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await StopCaptureAsync();
+        _stretchBitmap?.Dispose();
+        _stretchBitmap = null;
+    }
 
-    private static byte[] CopyBgra(Bitmap bitmap)
+    private static byte[] CopyBgra(Bitmap bitmap, byte[]? target = null)
     {
         var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
         var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
             var stride = bitmap.Width * 4;
-            var pixels = new byte[stride * bitmap.Height];
+            var pixels = target is not null && target.Length == stride * bitmap.Height ? target : new byte[stride * bitmap.Height];
             if (data.Stride == stride)
             {
                 Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
@@ -222,14 +247,20 @@ public class GdiScreenCapture : IScreenCapture
     }
 
     /// <summary>Captures the monitor already scaled to outW x outH using GDI StretchBlt (HALFTONE).</summary>
-    private static Bitmap? CaptureScaledViaStretch(MonitorInfo monitor, int outW, int outH)
+    private Bitmap? CaptureScaledViaStretch(MonitorInfo monitor, int outW, int outH)
     {
         var hdcSrc = GetDC(IntPtr.Zero);
         if (hdcSrc == IntPtr.Zero) return null;
         Bitmap? bmp = null;
         try
         {
-            bmp = new Bitmap(outW, outH, PixelFormat.Format32bppArgb);
+            // Reuse one bitmap between frames (allocating a 33 MB GDI bitmap per frame is expensive).
+            if (_stretchBitmap is null || _stretchBitmap.Width != outW || _stretchBitmap.Height != outH)
+            {
+                _stretchBitmap?.Dispose();
+                _stretchBitmap = new Bitmap(outW, outH, PixelFormat.Format32bppArgb);
+            }
+            bmp = _stretchBitmap;
             using var g = Graphics.FromImage(bmp);
             var hdcDst = g.GetHdc();
             bool ok;
@@ -247,15 +278,13 @@ public class GdiScreenCapture : IScreenCapture
             }
 
             if (!ok)
-            {
-                bmp.Dispose();
                 return null;
-            }
             return bmp;
         }
         catch
         {
-            bmp?.Dispose();
+            _stretchBitmap?.Dispose();
+            _stretchBitmap = null;
             return null;
         }
         finally

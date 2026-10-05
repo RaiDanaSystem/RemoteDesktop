@@ -45,6 +45,7 @@ public sealed class LanService : IDisposable
     /// <summary>A viewer wants to see this PC. The UI must call Accept/Reject on the request.</summary>
     public event Action<DirectConnectionRequest>? IncomingRequest;
 
+    public bool MuteUnsupported { get; private set; }
     public string HostingViewerName { get; private set; } = string.Empty;
     public bool HostingViewOnly { get; private set; }
 
@@ -183,6 +184,12 @@ public sealed class LanService : IDisposable
             var session = provider.GetRequiredService<RemoteDesktopSession>();
             var manager = provider.GetRequiredService<WebRtcSessionManager>();
 
+            MuteUnsupported = false;
+            session.AudioMuteUnsupported += (_, _) =>
+            {
+                MuteUnsupported = true;
+                HostingChanged?.Invoke();
+            };
             session.MuteSpeakersWhileStreamingAudio = _settings.MuteWhileShared;
             HostingViewerName = e.Request.ViewerName;
             HostingViewOnly = e.ViewOnly;

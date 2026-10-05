@@ -112,23 +112,54 @@ public class ScreenStreamingManager : IScreenStreamingManager
         var captureTask = Task.Run(async () =>
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            ulong lastHash = 0;
+            var staticFrames = 0;
+            var lastSignalTick = 0L;
             while (!token.IsCancellationRequested && _isStreaming)
             {
                 try
                 {
                     sw.Restart();
                     var interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(_targetFps, 1));
+
+                    // Don't capture faster than the encoder can consume: a frame nobody encodes is wasted CPU/heat.
+                    if (Volatile.Read(ref latest) is not null)
+                    {
+                        await Task.Delay(2, token);
+                        continue;
+                    }
+
                     var frame = await _capture.CaptureFrameAsync(token);
                     if (frame is not null)
                     {
-                        if (Interlocked.Exchange(ref latest, frame) is not null)
-                            _droppedFrames++; // previous frame was never encoded
-                        encodeSignal.Release();
+                        // Unchanged screen: skip encoding (and poll slower) but still send a heartbeat frame
+                        // twice a second so keyframes/recovery keep working.
+                        var hash = frame.Format == FrameFormat.RawBgra ? QuickHash(frame) : 0UL;
+                        var now = Environment.TickCount64;
+                        var same = hash != 0 && hash == lastHash && now - lastSignalTick < 500;
+                        lastHash = hash;
+                        if (same)
+                        {
+                            staticFrames++;
+                            (_capture as Capture.GdiScreenCapture)?.Recycle(frame.FrameBytes);
+                        }
+                        else
+                        {
+                            staticFrames = 0;
+                            lastSignalTick = now;
+                            if (Interlocked.Exchange(ref latest, frame) is not null)
+                                _droppedFrames++;
+                            encodeSignal.Release();
+                        }
                     }
                     else
                     {
                         _droppedFrames++;
                     }
+
+                    // Idle screen: poll at ~7 fps instead of the full rate until something changes.
+                    if (staticFrames >= 8 && interval < TimeSpan.FromMilliseconds(140))
+                        interval = TimeSpan.FromMilliseconds(140);
 
                     var elapsed = sw.Elapsed;
                     if (elapsed < interval)
@@ -163,6 +194,8 @@ public class ScreenStreamingManager : IScreenStreamingManager
 
                     sw.Restart();
                     var encodedPackets = EncodeOutgoing(frame, _jpegQuality);
+                    if (frame.Format == FrameFormat.RawBgra)
+                        (_capture as Capture.GdiScreenCapture)?.Recycle(frame.FrameBytes);
                     foreach (var encoded in encodedPackets)
                     {
                         pending.Enqueue((encoded.Format, encoded.Bytes, frame));
@@ -225,6 +258,27 @@ public class ScreenStreamingManager : IScreenStreamingManager
         _logger.LogInformation("Screen streaming started for session {SessionId}", sessionId);
 
         return new StreamingResult { IsSuccess = true };
+    }
+
+    /// <summary>
+    /// Cheap change detector: hashes every 8th row of the frame (a text caret or glyph always spans several rows,
+    /// so edits are still caught). Returns non-zero.
+    /// </summary>
+    private static ulong QuickHash(FrameData frame)
+    {
+        var bytes = frame.FrameBytes;
+        var stride = frame.Width * 4;
+        if (stride <= 0 || bytes.Length < stride) return 0;
+        ulong h = 1469598103934665603UL;
+        for (var y = 0; y + 1 <= frame.Height; y += 8)
+        {
+            var offset = y * stride;
+            if (offset + stride > bytes.Length) break;
+            var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ulong>(bytes.AsSpan(offset, stride));
+            for (var i = 0; i < words.Length; i++)
+                h = (h ^ words[i]) * 1099511628211UL;
+        }
+        return h | 1UL;
     }
 
     public void ApplySettings(int targetFps, int quality)

@@ -56,13 +56,55 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     /// </summary>
     public bool MuteSpeakersWhileStreamingAudio { get; set; }
 
+    /// <summary>Raised when muting the speakers also silenced the stream (some audio drivers do that); the mute is undone.</summary>
+    public event EventHandler? AudioMuteUnsupported;
+
+    private System.Threading.Timer? _muteWatch;
+    private int _muteStrikes;
+    private bool _muteBlocked;
+
     /// <summary>Re-applies the mute policy (e.g. after the user flips the setting during a session).</summary>
     public void ApplyAudioMutePolicy()
     {
-        if (MuteSpeakersWhileStreamingAudio && _viewerWantsAudio && _audioStreamer?.IsRunning == true)
+        var shouldMute = MuteSpeakersWhileStreamingAudio && _viewerWantsAudio
+                         && _audioStreamer?.IsRunning == true && !_muteBlocked;
+        if (shouldMute)
+        {
             HostAudioMute.Mute();
+            _muteStrikes = 0;
+            _muteWatch ??= new System.Threading.Timer(_ => CheckMuteSideEffect(), null, 1000, 700);
+        }
         else
+        {
+            _muteWatch?.Dispose();
+            _muteWatch = null;
             HostAudioMute.Restore();
+        }
+    }
+
+    /// <summary>
+    /// Some audio drivers (APO/enhancement stacks) apply the endpoint mute before the loopback tap, so muting
+    /// the speakers silences the stream too. Detect "apps are playing but the stream is silent" and undo the mute.
+    /// </summary>
+    private void CheckMuteSideEffect()
+    {
+        try
+        {
+            if (!HostAudioMute.IsActive || _audioStreamer is null) return;
+            var playing = HostAudioMute.PlaybackActivity() > 0.02;
+            var streamed = _audioStreamer.RecentPeak > 0.002;
+            _muteStrikes = playing && !streamed ? _muteStrikes + 1 : 0;
+            if (_muteStrikes >= 4)
+            {
+                _muteBlocked = true;
+                _muteWatch?.Dispose();
+                _muteWatch = null;
+                HostAudioMute.Restore();
+                Log("Muting the speakers also silences the stream on this audio driver - mute undone");
+                AudioMuteUnsupported?.Invoke(this, EventArgs.Empty);
+            }
+        }
+        catch { }
     }
 
     public event EventHandler<IncomingFileOfferEventArgs>? IncomingFileOffered;

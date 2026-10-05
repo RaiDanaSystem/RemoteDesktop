@@ -24,6 +24,13 @@ public sealed class SystemAudioStreamer : IDisposable
     private int _chunkFill;
 
     public bool IsRunning { get; private set; }
+
+    private long _peakTick;
+    private int _peakValue;
+
+    /// <summary>Largest sample (0..1) in the audio captured during the last ~1.5 s; 0 when nothing was captured.</summary>
+    public double RecentPeak =>
+        Environment.TickCount64 - Interlocked.Read(ref _peakTick) > 1500 ? 0 : Volatile.Read(ref _peakValue) / 32768.0;
     public int SampleRate => _sampleRate;
     public int Channels => _channels;
 
@@ -113,6 +120,12 @@ public sealed class SystemAudioStreamer : IDisposable
                     s16 = 0;
                 }
 
+                var abs = s16 < 0 ? -s16 : s16;
+                if (abs > _peakValue || Environment.TickCount64 - _peakTick > 1500)
+                {
+                    _peakValue = abs;
+                    Interlocked.Exchange(ref _peakTick, Environment.TickCount64);
+                }
                 _chunk[_chunkFill++] = (byte)(s16 & 0xFF);
                 _chunk[_chunkFill++] = (byte)((s16 >> 8) & 0xFF);
             }

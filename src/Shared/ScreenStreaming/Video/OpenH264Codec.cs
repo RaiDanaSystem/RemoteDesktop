@@ -12,14 +12,21 @@ public sealed class OpenH264Encoder : IDisposable
     private bool _forceKeyframe = true;
 
     private readonly bool _correctColors;
+    private bool _fast;
+    private int _fastFailures;
 
     /// <param name="correctColors">
     /// The captured frames are BGRA. The legacy stream labels them RGBA (red/blue swapped; the Windows viewer
     /// compensates when decoding). Viewers that decode with a hardware codec ask for correct colors instead.
     /// </param>
-    public OpenH264Encoder(int width, int height, int fps = 15, int bitrate = 1_500_000, bool correctColors = false)
+    /// <param name="fast">
+    /// Multi-threaded encoder setup (one slice per thread, bitrate rate control). Much faster at 1440p/4K.
+    /// Falls back to the legacy single-config path automatically if the native library rejects it.
+    /// </param>
+    public OpenH264Encoder(int width, int height, int fps = 15, int bitrate = 1_500_000, bool correctColors = false, bool fast = false)
     {
         _correctColors = correctColors;
+        _fast = fast;
         _fps = Math.Clamp(fps, 5, 60);
         _bitrate = Math.Clamp(bitrate, 250_000, 80_000_000);
         Reconfigure(Align16(width), Align16(height));
@@ -54,7 +61,16 @@ public sealed class OpenH264Encoder : IDisposable
 
         var image = new ImageData(_correctColors ? ImageType.Bgra : ImageType.Rgba, width, height, width * 4, bgra);
         if (!_encoder.Encode(image, out EncodedData[]? nalus) || nalus is null || nalus.Length == 0)
+        {
+            // The fast configuration never produced output: go back to the proven legacy setup.
+            if (_fast && ++_fastFailures >= 3)
+            {
+                _fast = false;
+                Reconfigure(_width, _height);
+            }
             return null;
+        }
+        _fastFailures = 0;
 
         using var ms = new MemoryStream();
         foreach (var nalu in nalus)
@@ -77,9 +93,69 @@ public sealed class OpenH264Encoder : IDisposable
         _height = height;
         _forceKeyframe = true;
         _encoder = new H264Encoder(OpenH264Native.DllPath);
+        if (_fast && TryInitializeFast(width, height))
+        {
+            _encoder.SetMaxBitrate(_bitrate);
+            _encoder.SetTargetFps(_fps);
+            return;
+        }
+
+        if (_fast)
+        {
+            // Fast setup failed: start over with a clean encoder instance.
+            _encoder.Dispose();
+            _encoder = new H264Encoder(OpenH264Native.DllPath);
+            _fast = false;
+        }
         _encoder.Initialize(width, height, _bitrate, _fps, ConfigType.ScreenCaptureAdvanced);
         _encoder.SetMaxBitrate(_bitrate);
         _encoder.SetTargetFps(_fps);
+    }
+
+    private bool TryInitializeFast(int width, int height)
+    {
+        try
+        {
+            var p = _encoder!.GetDefaultParameters();
+            var threads = (ushort)Math.Clamp(Environment.ProcessorCount, 1, width * height >= 1920 * 1080 ? 8 : 4);
+
+            p.iUsageType = EUsageType.SCREEN_CONTENT_REAL_TIME;
+            p.iPicWidth = width;
+            p.iPicHeight = height;
+            p.iTargetBitrate = _bitrate;
+            p.iMaxBitrate = _bitrate;
+            p.iRCMode = RC_MODES.RC_BITRATE_MODE;
+            p.fMaxFrameRate = _fps;
+            p.iTemporalLayerNum = 1;
+            p.iSpatialLayerNum = 1;
+            p.bEnableFrameSkip = false;
+            p.bEnableDenoise = false;
+            p.bEnableBackgroundDetection = false;
+            p.bEnableAdaptiveQuant = false;
+            p.iComplexityMode = ECOMPLEXITY_MODE.LOW_COMPLEXITY;
+            p.iMultipleThreadIdc = threads;
+            p.uiIntraPeriod = 0; // keyframes are requested explicitly
+
+            var layer = p.sSpatialLayers[0];
+            layer.iVideoWidth = width;
+            layer.iVideoHeight = height;
+            layer.fFrameRate = _fps;
+            layer.iSpatialBitrate = _bitrate;
+            layer.iMaxSpatialBitrate = _bitrate;
+            // One slice per thread (required for multi-threaded encoding).
+            layer.sSliceArgument.uiSliceMode = threads > 1 ? SliceModeEnum.SM_FIXEDSLCNUM_SLICE : SliceModeEnum.SM_SINGLE_SLICE;
+            layer.sSliceArgument.uiSliceNum = threads;
+            // Declare a level that fits the picture (decoders may reject 4K signalled as level 4.0).
+            if ((long)(width / 16) * (height / 16) > 8192)
+                layer.uiLevelIdc = ELevelIdc.LEVEL_5_1;
+            p.sSpatialLayers[0] = layer;
+
+            return _encoder.Initialize(p) == 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool IsKeyframeNal(byte[] annexB)

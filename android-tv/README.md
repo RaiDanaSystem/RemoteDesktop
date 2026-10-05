@@ -53,3 +53,15 @@ Compatible with the existing Windows agents without any server/agent change:
 REST (`/api/v1/auth/login`, `/api/v1/supportagent/connect|session/{id}/status|terminate`),
 SignalR `/hubs/webrtc` (`RequestOffer`, `SubmitOffer`, `SubmitIceCandidate`, …) and the
 `TransportEnvelope` / `ScreenFrameTransport` / `RDH2` (H.264) / `RDRT` (JPEG tiles) formats from `src/Shared`.
+
+## Signing & updates
+
+Releases are signed with the fixed key in `keystore/rdtv-release.jks` (password overridable through the
+`RDTV_STORE_PASSWORD` / `RDTV_KEY_PASSWORD` environment variables) and the CI run number is used as the
+`versionCode`, so every new APK installs over the previous one. The first install of this signed series
+requires uninstalling any older (debug-signed) copy once. Keep the keystore: losing it means a one-time
+uninstall again. For a public release, move the key/passwords into CI secrets and out of the repository.
+
+## Sound
+
+The PC's playback audio is streamed with the video (menu → *Sound*). It is sent as 16-bit PCM (about 1.5 Mbit/s).

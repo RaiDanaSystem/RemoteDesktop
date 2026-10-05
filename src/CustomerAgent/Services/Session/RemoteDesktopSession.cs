@@ -3,6 +3,7 @@ using System.Text.Json;
 using CustomerAgent.Services.Input;
 using CustomerAgent.Services.Interfaces;
 using Microsoft.Extensions.Logging;
+using RemoteSupport.Shared.Audio;
 using RemoteSupport.Shared.Clipboard;
 using RemoteSupport.Shared.FileTransfer;
 using RemoteSupport.Shared.Diagnostics;
@@ -46,6 +47,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private int _streamFps = 20;
     private int _streamQuality = 55;
     private int _streamMaxWidth; // 0 = derive from quality; up to 3840 (4K)
+    private SystemAudioStreamer? _audioStreamer;
 
     public event EventHandler<IncomingFileOfferEventArgs>? IncomingFileOffered;
 
@@ -538,6 +540,15 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             _screenStreaming.CorrectColors = colorFix == "1";
         }
 
+        if (control.Metadata is not null && _screenStreaming is not null
+            && control.Metadata.TryGetValue("FastEncode", out var fastEncode))
+        {
+            _screenStreaming.FastEncoder = fastEncode == "1";
+        }
+
+        if (control.Metadata is not null && control.Metadata.TryGetValue("Audio", out var audio))
+            SetSystemAudio(audio == "1");
+
         if (control.Metadata is not null && control.Metadata.TryGetValue("Codec", out var codec) && _screenStreaming is not null)
         {
             var tiles = string.Equals(codec, "tiles", StringComparison.OrdinalIgnoreCase);
@@ -557,6 +568,36 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
 
         _screenStreaming?.ApplySettings(_streamFps, _streamQuality);
         Log($"Stream settings applied: fps={_streamFps} quality={_streamQuality} width={maxWidth}");
+    }
+
+    /// <summary>Starts/stops streaming this PC's playback audio to the viewer (requested per session).</summary>
+    private void SetSystemAudio(bool on)
+    {
+        try
+        {
+            if (on && _audioStreamer is null)
+            {
+                var streamer = new SystemAudioStreamer(_logger);
+                streamer.PacketReady += bytes =>
+                {
+                    if (_disposed || !IsConnected) return;
+                    _ = _sessionManager.SendAsync(TransportMessageType.Audio, bytes);
+                };
+                streamer.Start();
+                _audioStreamer = streamer;
+                Log("System audio streaming started");
+            }
+            else if (!on && _audioStreamer is not null)
+            {
+                _audioStreamer.Dispose();
+                _audioStreamer = null;
+                Log("System audio streaming stopped");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "System audio toggle failed");
+        }
     }
 
     private static int MaxWidthForQuality(int quality) => quality switch
@@ -675,6 +716,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             }
 
             _sessionCts?.Cancel();
+            SetSystemAudio(false);
 
             _consentManager.RevokeConsent();
             _clipboardManager.RevokeConsent();

@@ -262,6 +262,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                     ["fps"] = _streamFps.ToString(),
                     ["Quality"] = _streamQuality.ToString(),
                     ["quality"] = _streamQuality.ToString(),
+                    ["FastEncode"] = "1", // multi-threaded encoder on the remote PC (auto-falls back if unsupported)
                     ["MaxWidth"] = _streamMaxWidth.ToString(),
                     ["maxWidth"] = _streamMaxWidth.ToString()
                 }

@@ -73,6 +73,38 @@ public class GdiScreenCapture : IScreenCapture
                 return Task.FromResult<FrameData?>(null);
 
             var monitor = monitors[_currentMonitorIndex];
+
+            // Fast path when downscaling: let GDI scale straight from the screen (HALFTONE) instead of
+            // grabbing a full-size bitmap and resampling it with GDI+ bicubic (very slow at 4K).
+            if (!IncludeHardwareCursor && monitor.Width > _maxWidth)
+            {
+                var fastScale = _maxWidth / (double)monitor.Width;
+                var fw = Math.Max(16, (int)(monitor.Width * fastScale) & ~15);
+                var fh = Math.Max(16, (int)(monitor.Height * fastScale) & ~15);
+                using var fast = CaptureScaledViaStretch(monitor, fw, fh);
+                if (fast is not null)
+                {
+                    var fastPixels = CopyBgra(fast);
+                    ForceOpaque(fastPixels);
+                    _frameSequence++;
+                    return Task.FromResult<FrameData?>(new FrameData
+                    {
+                        Width = fw,
+                        Height = fh,
+                        Format = FrameFormat.RawBgra,
+                        TimestampUtcTicks = DateTime.UtcNow.Ticks,
+                        SequenceNumber = _frameSequence,
+                        MonitorIndex = _currentMonitorIndex,
+                        MonitorCount = monitors.Count,
+                        NativeWidth = monitor.Width,
+                        NativeHeight = monitor.Height,
+                        NativeOriginX = monitor.BoundsX,
+                        NativeOriginY = monitor.BoundsY,
+                        FrameBytes = fastPixels
+                    });
+                }
+            }
+
             using var source = CaptureBitmap(monitor);
             if (source is null)
                 return Task.FromResult<FrameData?>(null);
@@ -153,9 +185,14 @@ public class GdiScreenCapture : IScreenCapture
         {
             var stride = bitmap.Width * 4;
             var pixels = new byte[stride * bitmap.Height];
-            for (var y = 0; y < bitmap.Height; y++)
+            if (data.Stride == stride)
             {
-                Marshal.Copy(data.Scan0 + y * data.Stride, pixels, y * stride, stride);
+                Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+            }
+            else
+            {
+                for (var y = 0; y < bitmap.Height; y++)
+                    Marshal.Copy(data.Scan0 + y * data.Stride, pixels, y * stride, stride);
             }
             return pixels;
         }
@@ -182,6 +219,57 @@ public class GdiScreenCapture : IScreenCapture
             bmp.Dispose();
             return CaptureViaBitBlt(monitor);
         }
+    }
+
+    /// <summary>Captures the monitor already scaled to outW x outH using GDI StretchBlt (HALFTONE).</summary>
+    private static Bitmap? CaptureScaledViaStretch(MonitorInfo monitor, int outW, int outH)
+    {
+        var hdcSrc = GetDC(IntPtr.Zero);
+        if (hdcSrc == IntPtr.Zero) return null;
+        Bitmap? bmp = null;
+        try
+        {
+            bmp = new Bitmap(outW, outH, PixelFormat.Format32bppArgb);
+            using var g = Graphics.FromImage(bmp);
+            var hdcDst = g.GetHdc();
+            bool ok;
+            try
+            {
+                SetStretchBltMode(hdcDst, 4 /* HALFTONE */);
+                SetBrushOrgEx(hdcDst, 0, 0, IntPtr.Zero);
+                ok = StretchBlt(hdcDst, 0, 0, outW, outH, hdcSrc,
+                    monitor.BoundsX, monitor.BoundsY, monitor.Width, monitor.Height,
+                    0x40CC0020 /* SRCCOPY | CAPTUREBLT */);
+            }
+            finally
+            {
+                g.ReleaseHdc(hdcDst);
+            }
+
+            if (!ok)
+            {
+                bmp.Dispose();
+                return null;
+            }
+            return bmp;
+        }
+        catch
+        {
+            bmp?.Dispose();
+            return null;
+        }
+        finally
+        {
+            ReleaseDC(IntPtr.Zero, hdcSrc);
+        }
+    }
+
+    /// <summary>GDI leaves alpha at 0 when blitting into a 32-bit bitmap; downstream encoders expect opaque pixels.</summary>
+    private static void ForceOpaque(byte[] bgra)
+    {
+        var px = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bgra.AsSpan());
+        for (var i = 0; i < px.Length; i++)
+            px[i] |= 0xFF000000u;
     }
 
     private Bitmap? CaptureViaBitBlt(MonitorInfo monitor)
@@ -308,6 +396,11 @@ public class GdiScreenCapture : IScreenCapture
     [DllImport("user32.dll")] private static extern bool DrawIcon(IntPtr hDC, int x, int y, IntPtr hIcon);
     [DllImport("user32.dll")] private static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
+    [DllImport("gdi32.dll")] private static extern int SetStretchBltMode(IntPtr hdc, int mode);
+    [DllImport("gdi32.dll")] private static extern bool SetBrushOrgEx(IntPtr hdc, int x, int y, IntPtr lppt);
+    [DllImport("gdi32.dll")]
+    private static extern bool StretchBlt(IntPtr hdcDest, int xDest, int yDest, int wDest, int hDest,
+        IntPtr hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, int rop);
     [DllImport("gdi32.dll")]
     private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int w, int h,
         IntPtr hdcSrc, int xSrc, int ySrc, int rop);

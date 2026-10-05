@@ -56,4 +56,6 @@
     <string name="hint_codec_auto">دیکودر ویدیو گیر کرد — به حالت سازگاری رفت</string>
     <string name="hint_codec_tiles">حالت سازگاری (JPEG)</string>
     <string name="hint_codec_h264">حالت H.264</string>
+    <string name="menu_sound_on">صدا: خاموش → روشن کن</string>
+    <string name="menu_sound_off">صدا: روشن → خاموش کن</string>
 </resources>

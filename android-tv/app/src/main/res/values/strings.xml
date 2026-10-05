@@ -56,4 +56,6 @@
     <string name="hint_codec_auto">Video decoder stalled — switched to compatibility mode</string>
     <string name="hint_codec_tiles">Compatibility mode (JPEG tiles)</string>
     <string name="hint_codec_h264">H.264 mode</string>
+    <string name="menu_sound_on">Sound: OFF → turn on</string>
+    <string name="menu_sound_off">Sound: ON → turn off</string>
 </resources>

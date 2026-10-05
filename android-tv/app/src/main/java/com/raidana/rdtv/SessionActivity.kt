@@ -34,6 +34,7 @@ import com.raidana.rdtv.rtc.Link
 import com.raidana.rdtv.rtc.RtcSession
 import com.raidana.rdtv.ui.KeyMap
 import com.raidana.rdtv.ui.RemoteScreenView
+import com.raidana.rdtv.video.AudioPlayer
 import com.raidana.rdtv.video.H264Assembler
 import com.raidana.rdtv.video.H264Decoder
 import com.raidana.rdtv.video.TileCanvas
@@ -87,6 +88,9 @@ class SessionActivity : Activity(), RtcSession.Listener {
     private var lastStatsAt = SystemClock.elapsedRealtime()
     @Volatile private var rttMs = -1L
     private var showStats = true
+    private var soundOn = true
+    private var audioPlayer: AudioPlayer? = null
+    private val prefs by lazy { getSharedPreferences("rdtv", Context.MODE_PRIVATE) }
 
     // settings
     private var fps = 30
@@ -144,6 +148,8 @@ class SessionActivity : Activity(), RtcSession.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        showStats = prefs.getBoolean("showStats", true)
+        soundOn = prefs.getBoolean("soundOn", true)
         setContentView(R.layout.activity_session)
         screen = findViewById(R.id.screen)
         statusText = findViewById(R.id.status)
@@ -364,6 +370,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             try { s?.close() } catch (_: Exception) {}
             try { if (sid != null) a?.terminate(sid) } catch (_: Exception) {}
             try { d?.release() } catch (_: Exception) {}
+            try { audioPlayer?.release() } catch (_: Exception) {}
             try { wifiLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
             try { wakeLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
         }.start()
@@ -388,7 +395,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
             ui.postDelayed({ hintText.visibility = View.GONE }, 9000)
             ui.postDelayed(statsTick, 1000)
         }
-        rtc?.send(Proto.streamSettings(fps, quality, maxWidth, codecMode))
+        rtc?.send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
         Thread {
             while (!ended && channelOpen) {
                 rtc?.send(Proto.ping())
@@ -426,6 +433,10 @@ class SessionActivity : Activity(), RtcSession.Listener {
             Proto.T_SCREEN -> {
                 val f = Proto.parseScreenFrame(env) ?: return
                 decode.execute { handleFrame(f) }
+            }
+            Proto.T_AUDIO -> if (soundOn) {
+                val p = audioPlayer ?: AudioPlayer().also { audioPlayer = it }
+                p.onPacket(env.data, env.offset, env.length)
             }
             Proto.T_PONG -> try {
                 val j = JSONObject(String(env.data, env.offset, env.length))
@@ -832,6 +843,15 @@ class SessionActivity : Activity(), RtcSession.Listener {
             }
             menuList.addView(b)
         }
+        // Most-needed entries first so a TV remote reaches them without scrolling.
+        item(getString(R.string.menu_close)) { }
+        item(getString(R.string.menu_disconnect)) { endSession(null) }
+        item(getString(if (soundOn) R.string.menu_sound_off else R.string.menu_sound_on)) {
+            soundOn = !soundOn
+            prefs.edit().putBoolean("soundOn", soundOn).apply()
+            if (!soundOn) { audioPlayer?.release(); audioPlayer = null }
+            send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
+        }
         item(getString(R.string.menu_right_click)) { click(Proto.BTN_RIGHT) }
         item(getString(R.string.menu_double_click)) { doubleClick() }
         item(getString(if (scrollMode) R.string.menu_scroll_off else R.string.menu_scroll_on)) { scrollMode = !scrollMode }
@@ -858,10 +878,10 @@ class SessionActivity : Activity(), RtcSession.Listener {
             send(Proto.showRemoteCursor(remoteCursor))
         }
         item(getString(if (showStats) R.string.menu_stats_off else R.string.menu_stats_on)) {
-            showStats = !showStats; updateStats()
+            showStats = !showStats
+            prefs.edit().putBoolean("showStats", showStats).apply()
+            updateStats()
         }
-        item(getString(R.string.menu_disconnect)) { endSession(null) }
-        item(getString(R.string.menu_close)) { }
 
         heldDirs.clear()
         ui.removeCallbacks(ticker)
@@ -877,7 +897,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     private fun applyQuality(f: Int, q: Int, w: Int) {
         fps = f; quality = q; maxWidth = w
-        send(Proto.streamSettings(f, q, w, codecMode))
+        send(Proto.streamSettings(f, q, w, codecMode, soundOn))
     }
 
     /** Compatibility mode: the PC sends JPEG tiles instead of H.264 (software path, works everywhere). */
@@ -885,7 +905,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         codecMode = if (on) "tiles" else "h264"
         stuckSeconds = 0
         if (!on) tilesRequested = false
-        send(Proto.streamSettings(fps, quality, maxWidth, codecMode))
+        send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
         flashHint(if (auto) R.string.hint_codec_auto else if (on) R.string.hint_codec_tiles else R.string.hint_codec_h264)
     }
 

@@ -11,18 +11,29 @@ android {
         applicationId = "com.raidana.rdtv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI passes a monotonically increasing run number so every build can update the previous one.
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = 100 + run
+        versionName = "1.2.$run"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
+    }
+
+    signingConfigs {
+        // One fixed key for every build, so a new APK installs over the old one (no uninstall needed).
+        create("release") {
+            storeFile = file("../keystore/rdtv-release.jks")
+            storePassword = System.getenv("RDTV_STORE_PASSWORD") ?: "rdtv-Sig-2026"
+            keyAlias = "rdtv"
+            keyPassword = System.getenv("RDTV_KEY_PASSWORD") ?: "rdtv-Sig-2026"
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Sideload-friendly: signed with the auto-generated debug key.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

@@ -19,6 +19,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
     private int _targetFps = 20;
     private int _jpegQuality = 55;
     private int _rebuildEncoder;
+    private long _lastKeyframeTick;
     private CancellationTokenSource? _streamingCts;
     private Task? _streamingTask;
     private bool _isStreaming;
@@ -39,6 +40,9 @@ public class ScreenStreamingManager : IScreenStreamingManager
 
     /// <summary>Encode H.264 with correct colors (for hardware-decoding viewers such as Android).</summary>
     public bool CorrectColors { get; set; }
+
+    /// <summary>Use the multi-threaded OpenH264 setup (viewers that ask for it; big win at 1440p/4K).</summary>
+    public bool FastEncoder { get; set; }
     public event Action<FrameData>? FrameCaptured;
     public event Action<string>? StreamingStateChanged;
 
@@ -94,77 +98,41 @@ public class ScreenStreamingManager : IScreenStreamingManager
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             _streamingCts.Token, cancellationToken);
 
-        var pending = new Queue<(FrameFormat Format, byte[] Bytes, FrameData Meta)>();
-        // Direct (TCP) mode can push many parts per tick; WebRTC data channels need the gentler defaults.
-        var maxSendPerTick = Direct ? 256 : 8;
+        // Three-stage pipeline so capture, encode and network send overlap:
+        //   capture (paced by fps) -> latest-frame slot -> encode -> send queue -> network
+        // Slow encoders just drop captured frames (newest wins), which keeps latency low.
+        var pending = new System.Collections.Concurrent.ConcurrentQueue<(FrameFormat Format, byte[] Bytes, FrameData Meta)>();
+        // Direct (TCP) mode can queue many parts; WebRTC data channels need the gentler limit.
         var maxQueue = Direct ? 120 : 36;
+        var sendSignal = new SemaphoreSlim(0);
+        var encodeSignal = new SemaphoreSlim(0);
+        FrameData? latest = null;
+        var token = linkedCts.Token;
 
-        _streamingTask = Task.Run(async () =>
+        var captureTask = Task.Run(async () =>
         {
-            var frameStopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var lastTrace = Environment.TickCount64;
-
-            while (!linkedCts.Token.IsCancellationRequested && _isStreaming)
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (!token.IsCancellationRequested && _isStreaming)
             {
                 try
                 {
-                    frameStopwatch.Restart();
-                    var sentThisTick = 0;
-                    var frameInterval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(_targetFps, 1));
-                    var qualityNow = _jpegQuality;
-
-                    while (sentThisTick < maxSendPerTick && pending.Count > 0)
+                    sw.Restart();
+                    var interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(_targetFps, 1));
+                    var frame = await _capture.CaptureFrameAsync(token);
+                    if (frame is not null)
                     {
-                        var item = pending.Dequeue();
-                        var sendFrame = item.Meta;
-                        sendFrame.Format = item.Format;
-                        sendFrame.FrameBytes = item.Bytes;
-                        FrameCaptured?.Invoke(sendFrame);
-                        if (onFrameCaptured is not null)
-                            await onFrameCaptured(sendFrame);
-                        _totalFrames++;
-                        _totalBytesSent += item.Bytes.Length;
-                        sentThisTick++;
-                    }
-
-                    if (pending.Count < maxQueue)
-                    {
-                        var frame = await _capture.CaptureFrameAsync(linkedCts.Token);
-                        if (frame is not null)
-                        {
-                            var encodedPackets = EncodeOutgoing(frame, qualityNow);
-                            foreach (var encoded in encodedPackets)
-                                pending.Enqueue((encoded.Format, encoded.Bytes, frame));
-
-                            if (encodedPackets.Count > 4)
-                            {
-                                SessionTrace.Write("stream",
-                                    $"encode burst packets={encodedPackets.Count} queue={pending.Count} {frame.Width}x{frame.Height} q={qualityNow}");
-                            }
-                        }
-                        else
-                        {
-                            _droppedFrames++;
-                        }
+                        if (Interlocked.Exchange(ref latest, frame) is not null)
+                            _droppedFrames++; // previous frame was never encoded
+                        encodeSignal.Release();
                     }
                     else
                     {
                         _droppedFrames++;
                     }
 
-                    TrackMetrics(frameStopwatch.Elapsed.TotalMilliseconds, sentThisTick);
-
-                    var now = Environment.TickCount64;
-                    if (now - lastTrace >= 1000)
-                    {
-                        lastTrace = now;
-                        SessionTrace.Stream("stream",
-                            $"fps={(_fpsSamples.Count > 0 ? _fpsSamples.Average():0):0.0} queue={pending.Count} sent={_totalFrames} dropped={_droppedFrames} inFlightSend={sentThisTick}");
-                    }
-
-                    var elapsed = frameStopwatch.Elapsed;
-                    if (elapsed < frameInterval)
-                        await Task.Delay(frameInterval - elapsed, linkedCts.Token);
+                    var elapsed = sw.Elapsed;
+                    if (elapsed < interval)
+                        await Task.Delay(interval - elapsed, token);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
@@ -174,7 +142,84 @@ public class ScreenStreamingManager : IScreenStreamingManager
                     _droppedFrames++;
                 }
             }
-        }, linkedCts.Token);
+        }, token);
+
+        var encodeTask = Task.Run(async () =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var lastTrace = Environment.TickCount64;
+            while (!token.IsCancellationRequested && _isStreaming)
+            {
+                try
+                {
+                    await encodeSignal.WaitAsync(token);
+                    var frame = Interlocked.Exchange(ref latest, null);
+                    if (frame is null) continue;
+                    if (pending.Count >= maxQueue)
+                    {
+                        _droppedFrames++;
+                        continue;
+                    }
+
+                    sw.Restart();
+                    var encodedPackets = EncodeOutgoing(frame, _jpegQuality);
+                    foreach (var encoded in encodedPackets)
+                    {
+                        pending.Enqueue((encoded.Format, encoded.Bytes, frame));
+                        sendSignal.Release();
+                    }
+                    TrackMetrics(sw.Elapsed.TotalMilliseconds, 0);
+
+                    if (encodedPackets.Count > 4)
+                    {
+                        SessionTrace.Write("stream",
+                            $"encode burst packets={encodedPackets.Count} queue={pending.Count} {frame.Width}x{frame.Height} q={_jpegQuality}");
+                    }
+
+                    var now = Environment.TickCount64;
+                    if (now - lastTrace >= 1000)
+                    {
+                        lastTrace = now;
+                        SessionTrace.Stream("stream",
+                            $"encode={sw.Elapsed.TotalMilliseconds:0}ms queue={pending.Count} sent={_totalFrames} dropped={_droppedFrames}");
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error during frame encode");
+                    SessionTrace.Write("stream", $"encode error: {ex.Message}");
+                    _droppedFrames++;
+                }
+            }
+        }, token);
+
+        var sendTask = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested && _isStreaming)
+            {
+                try
+                {
+                    await sendSignal.WaitAsync(token);
+                    if (!pending.TryDequeue(out var item)) continue;
+                    var sendFrame = item.Meta;
+                    sendFrame.Format = item.Format;
+                    sendFrame.FrameBytes = item.Bytes;
+                    FrameCaptured?.Invoke(sendFrame);
+                    if (onFrameCaptured is not null)
+                        await onFrameCaptured(sendFrame);
+                    _totalFrames++;
+                    _totalBytesSent += item.Bytes.Length;
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error during frame send");
+                }
+            }
+        }, token);
+
+        _streamingTask = Task.WhenAll(captureTask, encodeTask, sendTask);
 
         StreamingStateChanged?.Invoke("Streaming");
         _logger.LogInformation("Screen streaming started for session {SessionId}", sessionId);
@@ -270,9 +315,13 @@ public class ScreenStreamingManager : IScreenStreamingManager
                 _h264 = null;
             }
 
-            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality, frame.Width, frame.Height, Direct), correctColors: CorrectColors);
-            if (frame.SequenceNumber == 1 || frame.SequenceNumber % Math.Max(_targetFps, 1) == 0)
+            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality, frame.Width, frame.Height, Direct), correctColors: CorrectColors, fast: FastEncoder);
+            var tick = Environment.TickCount64;
+            if (frame.SequenceNumber <= 1 || tick - _lastKeyframeTick >= 1000)
+            {
+                _lastKeyframeTick = tick;
                 _h264.RequestKeyframe();
+            }
             var annexB = _h264.EncodeBgra(frame.FrameBytes, frame.Width, frame.Height, out var keyframe);
             if (annexB is null || annexB.Length == 0)
                 return [];

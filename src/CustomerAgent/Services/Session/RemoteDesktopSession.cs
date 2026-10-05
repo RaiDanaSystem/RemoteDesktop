@@ -48,6 +48,22 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private int _streamQuality = 55;
     private int _streamMaxWidth; // 0 = derive from quality; up to 3840 (4K)
     private SystemAudioStreamer? _audioStreamer;
+    private bool _viewerWantsAudio;
+
+    /// <summary>
+    /// When true, this PC's own speakers are muted while its sound is being streamed to the viewer
+    /// ("listen on the viewer only"). Set by the app from the user's saved preference.
+    /// </summary>
+    public bool MuteSpeakersWhileStreamingAudio { get; set; }
+
+    /// <summary>Re-applies the mute policy (e.g. after the user flips the setting during a session).</summary>
+    public void ApplyAudioMutePolicy()
+    {
+        if (MuteSpeakersWhileStreamingAudio && _viewerWantsAudio && _audioStreamer?.IsRunning == true)
+            HostAudioMute.Mute();
+        else
+            HostAudioMute.Restore();
+    }
 
     public event EventHandler<IncomingFileOfferEventArgs>? IncomingFileOffered;
 
@@ -548,8 +564,8 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
 
         if (control.Metadata is not null && control.Metadata.TryGetValue("Audio", out var audio))
         {
-            var muteHere = control.Metadata.TryGetValue("MuteHost", out var mute) && mute == "1";
-            SetSystemAudio(audio == "1", muteHere);
+            _viewerWantsAudio = audio == "1";
+            SetSystemAudio(_viewerWantsAudio);
         }
 
         if (control.Metadata is not null && control.Metadata.TryGetValue("Codec", out var codec) && _screenStreaming is not null)
@@ -574,7 +590,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     }
 
     /// <summary>Starts/stops streaming this PC's playback audio to the viewer (requested per session).</summary>
-    private void SetSystemAudio(bool on, bool muteHostSpeakers = false)
+    private void SetSystemAudio(bool on)
     {
         try
         {
@@ -598,10 +614,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             }
 
             // "Listen there, not here": silence this PC's speakers while the stream is running.
-            if (on && muteHostSpeakers && _audioStreamer?.IsRunning == true)
-                HostAudioMute.Mute();
-            else
-                HostAudioMute.Restore();
+            ApplyAudioMutePolicy();
         }
         catch (Exception ex)
         {

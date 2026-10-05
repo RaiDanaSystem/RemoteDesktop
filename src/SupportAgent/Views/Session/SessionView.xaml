@@ -72,8 +72,8 @@
                                FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox ItemsSource="{Binding AudioModeOptions}" SelectedIndex="{Binding StreamAudioMode}"
                               Style="{StaticResource Combo.Tool}"
-                              Width="190" Margin="0,0,10,0" VerticalAlignment="Center"
-                              ToolTip="Hear the remote PC here; optionally silence its own speakers"/>
+                              Width="110" Margin="0,0,10,0" VerticalAlignment="Center"
+                              ToolTip="Hear the remote PC's sound here"/>
                     <TextBlock Text="{Binding StreamResolutionLabel}" Foreground="{StaticResource Brush.Muted}"
                                FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding StreamResolution}"

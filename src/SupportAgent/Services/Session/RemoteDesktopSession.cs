@@ -48,7 +48,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private int _streamFps = 20;
     private int _streamQuality = 55;
     private int _streamMaxWidth; // 0 = automatic
-    private int _audioMode;     // 0 off, 1 play here, 2 play here + mute the remote PC's speakers
+    private int _audioMode;     // 0 off, 1 play the remote PC's sound here
     private PcmAudioPlayer? _audioPlayer;
 
     public event EventHandler<FileTransferProgressEventArgs>? FileTransferProgress;
@@ -267,7 +267,6 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                     ["quality"] = _streamQuality.ToString(),
                     ["FastEncode"] = "1", // multi-threaded encoder on the remote PC (auto-falls back if unsupported)
                     ["Audio"] = _audioMode > 0 ? "1" : "0",
-                    ["MuteHost"] = _audioMode == 2 ? "1" : "0",
                     ["MaxWidth"] = _streamMaxWidth.ToString(),
                     ["maxWidth"] = _streamMaxWidth.ToString()
                 }
@@ -521,10 +520,10 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
         _audioPlayer.Play(packet);
     }
 
-    /// <summary>Chooses what happens with the remote PC's sound and tells the remote PC (persisted by the caller).</summary>
+    /// <summary>Turns the remote PC's sound on/off for this viewer (muting the sender's speakers is the sender's own setting).</summary>
     public void SetAudioMode(int mode)
     {
-        _audioMode = Math.Clamp(mode, 0, 2);
+        _audioMode = Math.Clamp(mode, 0, 1);
         if (_audioMode == 0)
         {
             _audioPlayer?.Dispose();

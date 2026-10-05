@@ -25,16 +25,16 @@ public static class ViewerPrefs
         return new Data();
     }
 
-    /// <summary>0 = off, 1 = play here, 2 = play here and mute the remote PC's speakers.</summary>
+    /// <summary>0 = off, 1 = play the remote PC's sound here.</summary>
     public static int AudioMode
     {
-        get => Math.Clamp(Load().AudioMode, 0, 2);
+        get => Math.Clamp(Load().AudioMode, 0, 1);
         set
         {
             try
             {
                 var d = Load();
-                d.AudioMode = Math.Clamp(value, 0, 2);
+                d.AudioMode = Math.Clamp(value, 0, 1);
                 Directory.CreateDirectory(Path.GetDirectoryName(PathFile)!);
                 File.WriteAllText(PathFile, JsonSerializer.Serialize(d));
             }

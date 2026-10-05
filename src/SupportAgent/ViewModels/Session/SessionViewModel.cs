@@ -56,13 +56,12 @@ public partial class SessionViewModel : ViewModelBase
     public string[] ResolutionOptions { get; } = ["Auto", "1080p", "1440p", "4K"];
     [ObservableProperty] private string _streamResolution = "Auto";
 
-    // Remote sound: 0 off, 1 play here, 2 play here and mute the remote PC (last choice is remembered)
+    // Remote sound: 0 off, 1 play here (muting the sender's own speakers is a setting on the sender; last choice is remembered)
     [ObservableProperty] private int _streamAudioMode = SupportAgent.Services.Implementation.ViewerPrefs.AudioMode;
     public string[] AudioModeOptions => new[]
     {
         _localization.GetString("Sound_Off"),
-        _localization.GetString("Sound_Here"),
-        _localization.GetString("Sound_HereMute")
+        _localization.GetString("Sound_Here")
     };
     private static int ResolutionToWidth(string value) => value switch
     {

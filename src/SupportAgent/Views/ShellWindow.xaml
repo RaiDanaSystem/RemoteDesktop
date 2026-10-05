@@ -199,7 +199,11 @@
                             </Button>
 
                             <CheckBox Content="{Binding LanShareLabel}" IsChecked="{Binding LanSharingEnabled}"
-                                      Foreground="{StaticResource Brush.Text}" FontSize="13" Margin="2,0,0,20"/>
+                                      Foreground="{StaticResource Brush.Text}" FontSize="13" Margin="2,0,0,8"/>
+                            <CheckBox IsChecked="{Binding LanMuteWhileShared}"
+                                      Foreground="{StaticResource Brush.Text}" FontSize="13" Margin="2,0,0,20">
+                                <TextBlock Text="{Binding LanMuteLabel}" TextWrapping="Wrap"/>
+                            </CheckBox>
 
                             <StackPanel Visibility="{Binding ShowServerOnHome, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <TextBlock Text="{Binding ServerLabel}" FontSize="13" FontWeight="SemiBold"

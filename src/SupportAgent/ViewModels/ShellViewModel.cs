@@ -68,6 +68,18 @@ public partial class ShellViewModel : ViewModelBase
     public string LanDisconnectLabel => _localization.GetString("Lan_Disconnect");
     public string LanShareLabel => string.Format(_localization.GetString("Lan_ShareToggle"), Environment.MachineName);
 
+    public string LanMuteLabel => _localization.GetString("Lan_MuteToggle");
+
+    public bool LanMuteWhileShared
+    {
+        get => _lan.MuteSpeakersWhileShared;
+        set
+        {
+            _lan.MuteSpeakersWhileShared = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool LanSharingEnabled
     {
         get => _lan.SharingEnabled;
@@ -452,6 +464,7 @@ public partial class ShellViewModel : ViewModelBase
         OnPropertyChanged(nameof(LanCardTitle));
         OnPropertyChanged(nameof(LanCardBody));
         OnPropertyChanged(nameof(LanShareLabel));
+        OnPropertyChanged(nameof(LanMuteLabel));
         OnPropertyChanged(nameof(ServerLabel));
         OnPropertyChanged(nameof(ServerHint));
         OnPropertyChanged(nameof(SaveServerButton));

@@ -89,7 +89,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
     @Volatile private var rttMs = -1L
     private var showStats = true
     private var soundOn = true
-    private var muteHost = false
+    private val muteHost = false // muting the PC's speakers is a setting in the Windows app
     private var audioPlayer: AudioPlayer? = null
     private val prefs by lazy { getSharedPreferences("rdtv", Context.MODE_PRIVATE) }
 
@@ -151,7 +151,6 @@ class SessionActivity : Activity(), RtcSession.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showStats = prefs.getBoolean("showStats", true)
         soundOn = prefs.getBoolean("soundOn", true)
-        muteHost = prefs.getBoolean("muteHost", false)
         remoteCursor = prefs.getBoolean("remoteCursor", false)
         setContentView(R.layout.activity_session)
         screen = findViewById(R.id.screen)
@@ -854,11 +853,6 @@ class SessionActivity : Activity(), RtcSession.Listener {
             soundOn = !soundOn
             prefs.edit().putBoolean("soundOn", soundOn).apply()
             if (!soundOn) { audioPlayer?.release(); audioPlayer = null }
-            send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
-        }
-        item(getString(if (muteHost) R.string.menu_mute_host_off else R.string.menu_mute_host_on)) {
-            muteHost = !muteHost
-            prefs.edit().putBoolean("muteHost", muteHost).apply()
             send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
         }
         item(getString(R.string.menu_right_click)) { click(Proto.BTN_RIGHT) }

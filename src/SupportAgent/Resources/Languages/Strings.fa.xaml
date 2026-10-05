@@ -157,4 +157,5 @@
     <system:String x:Key="Sound_Off">خاموش</system:String>
     <system:String x:Key="Sound_Here">پخش اینجا</system:String>
     <system:String x:Key="Sound_HereMute">پخش اینجا، قطع صدای رایانه‌ی مقابل</system:String>
+    <system:String x:Key="Lan_MuteToggle">وقتی کسی با صدا این رایانه را می‌بیند، صدا فقط روی دستگاه بیننده پخش شود (بلندگوی این رایانه قطع شود)</system:String>
 </ResourceDictionary>

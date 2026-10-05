@@ -48,6 +48,23 @@ public sealed class LanService : IDisposable
     public string HostingViewerName { get; private set; } = string.Empty;
     public bool HostingViewOnly { get; private set; }
 
+    /// <summary>While someone views this PC with sound, play the sound only on the viewer (mute local speakers).</summary>
+    public bool MuteSpeakersWhileShared
+    {
+        get => _settings.MuteWhileShared;
+        set
+        {
+            _settings.MuteWhileShared = value;
+            Save();
+            var session = _hostSession;
+            if (session is not null)
+            {
+                session.MuteSpeakersWhileStreamingAudio = value;
+                session.ApplyAudioMutePolicy();
+            }
+        }
+    }
+
     public bool SharingEnabled
     {
         get => _settings.Sharing;
@@ -166,6 +183,7 @@ public sealed class LanService : IDisposable
             var session = provider.GetRequiredService<RemoteDesktopSession>();
             var manager = provider.GetRequiredService<WebRtcSessionManager>();
 
+            session.MuteSpeakersWhileStreamingAudio = _settings.MuteWhileShared;
             HostingViewerName = e.Request.ViewerName;
             HostingViewOnly = e.ViewOnly;
             _hostServices = provider;
@@ -296,5 +314,6 @@ public sealed class LanService : IDisposable
         public string Id { get; set; } = string.Empty;
         public bool Sharing { get; set; } = true;
         public bool FirewallTried { get; set; }
+        public bool MuteWhileShared { get; set; }
     }
 }

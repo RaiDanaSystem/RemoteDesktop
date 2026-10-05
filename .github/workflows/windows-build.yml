@@ -17,13 +17,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # The OpenH264 binary is not stored in git (see .gitignore); a placeholder is enough to compile-check.
+      - name: Placeholder for the native OpenH264 DLL
+        shell: pwsh
+        run: |
+          $p = 'src/Shared/Native/openh264-2.4.0-win64.dll'
+          if (-not (Test-Path $p)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path $p) | Out-Null
+            New-Item -ItemType File -Path $p | Out-Null
+          }
+
       - name: Build SupportAgent (includes Shared + CustomerAgent)
         run: dotnet build src/SupportAgent/SupportAgent.csproj -c Release -nologo
-
-      - name: Publish SupportAgent
-        run: dotnet publish src/SupportAgent/SupportAgent.csproj -c Release -r win-x64 --self-contained false -o publish/SupportAgent -nologo
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SupportAgent-win-x64
-          path: publish/SupportAgent

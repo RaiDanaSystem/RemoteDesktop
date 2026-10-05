@@ -547,7 +547,10 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
         }
 
         if (control.Metadata is not null && control.Metadata.TryGetValue("Audio", out var audio))
-            SetSystemAudio(audio == "1");
+        {
+            var muteHere = control.Metadata.TryGetValue("MuteHost", out var mute) && mute == "1";
+            SetSystemAudio(audio == "1", muteHere);
+        }
 
         if (control.Metadata is not null && control.Metadata.TryGetValue("Codec", out var codec) && _screenStreaming is not null)
         {
@@ -571,7 +574,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     }
 
     /// <summary>Starts/stops streaming this PC's playback audio to the viewer (requested per session).</summary>
-    private void SetSystemAudio(bool on)
+    private void SetSystemAudio(bool on, bool muteHostSpeakers = false)
     {
         try
         {
@@ -593,6 +596,12 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                 _audioStreamer = null;
                 Log("System audio streaming stopped");
             }
+
+            // "Listen there, not here": silence this PC's speakers while the stream is running.
+            if (on && muteHostSpeakers && _audioStreamer?.IsRunning == true)
+                HostAudioMute.Mute();
+            else
+                HostAudioMute.Restore();
         }
         catch (Exception ex)
         {

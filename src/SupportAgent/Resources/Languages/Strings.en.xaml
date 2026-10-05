@@ -153,4 +153,8 @@
     <system:String x:Key="Lan_ViewOnly">View only</system:String>
     <system:String x:Key="Lan_Reject">Reject</system:String>
     <system:String x:Key="Lan_Disconnect">Disconnect</system:String>
+    <system:String x:Key="Session_Sound">Sound</system:String>
+    <system:String x:Key="Sound_Off">Off</system:String>
+    <system:String x:Key="Sound_Here">Play here</system:String>
+    <system:String x:Key="Sound_HereMute">Play here, mute remote PC</system:String>
 </ResourceDictionary>

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
 using RemoteSupport.Shared;
+using RemoteSupport.Shared.Audio;
 using SupportAgent.Configuration;
 using SupportAgent.Services.Direct;
 using SupportAgent.Services.Implementation;
@@ -30,6 +31,9 @@ public partial class App : Application
             .MinimumLevel.Debug()
             .WriteTo.File("SupportAgent.log", shared: true)
             .CreateLogger();
+
+        // A previous run may have been killed while the speakers were muted for remote listening.
+        HostAudioMute.RestoreIfLeftMuted();
 
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -70,6 +74,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         try { _serviceProvider?.GetService<LanService>()?.Dispose(); } catch { }
+        try { HostAudioMute.Restore(); } catch { }
         base.OnExit(e);
     }
 }

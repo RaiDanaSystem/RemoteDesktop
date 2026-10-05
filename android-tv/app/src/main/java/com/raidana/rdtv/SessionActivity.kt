@@ -89,6 +89,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
     @Volatile private var rttMs = -1L
     private var showStats = true
     private var soundOn = true
+    private var muteHost = false
     private var audioPlayer: AudioPlayer? = null
     private val prefs by lazy { getSharedPreferences("rdtv", Context.MODE_PRIVATE) }
 
@@ -150,6 +151,8 @@ class SessionActivity : Activity(), RtcSession.Listener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showStats = prefs.getBoolean("showStats", true)
         soundOn = prefs.getBoolean("soundOn", true)
+        muteHost = prefs.getBoolean("muteHost", false)
+        remoteCursor = prefs.getBoolean("remoteCursor", false)
         setContentView(R.layout.activity_session)
         screen = findViewById(R.id.screen)
         statusText = findViewById(R.id.status)
@@ -395,7 +398,8 @@ class SessionActivity : Activity(), RtcSession.Listener {
             ui.postDelayed({ hintText.visibility = View.GONE }, 9000)
             ui.postDelayed(statsTick, 1000)
         }
-        rtc?.send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
+        rtc?.send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
+        if (remoteCursor) rtc?.send(Proto.showRemoteCursor(true)) // remembered from last time
         Thread {
             while (!ended && channelOpen) {
                 rtc?.send(Proto.ping())
@@ -850,7 +854,12 @@ class SessionActivity : Activity(), RtcSession.Listener {
             soundOn = !soundOn
             prefs.edit().putBoolean("soundOn", soundOn).apply()
             if (!soundOn) { audioPlayer?.release(); audioPlayer = null }
-            send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
+            send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
+        }
+        item(getString(if (muteHost) R.string.menu_mute_host_off else R.string.menu_mute_host_on)) {
+            muteHost = !muteHost
+            prefs.edit().putBoolean("muteHost", muteHost).apply()
+            send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
         }
         item(getString(R.string.menu_right_click)) { click(Proto.BTN_RIGHT) }
         item(getString(R.string.menu_double_click)) { doubleClick() }
@@ -875,6 +884,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         }
         item(getString(if (remoteCursor) R.string.menu_remote_cursor_off else R.string.menu_remote_cursor_on)) {
             remoteCursor = !remoteCursor
+            prefs.edit().putBoolean("remoteCursor", remoteCursor).apply()
             send(Proto.showRemoteCursor(remoteCursor))
         }
         item(getString(if (showStats) R.string.menu_stats_off else R.string.menu_stats_on)) {
@@ -897,7 +907,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     private fun applyQuality(f: Int, q: Int, w: Int) {
         fps = f; quality = q; maxWidth = w
-        send(Proto.streamSettings(f, q, w, codecMode, soundOn))
+        send(Proto.streamSettings(f, q, w, codecMode, soundOn, muteHost))
     }
 
     /** Compatibility mode: the PC sends JPEG tiles instead of H.264 (software path, works everywhere). */
@@ -905,7 +915,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         codecMode = if (on) "tiles" else "h264"
         stuckSeconds = 0
         if (!on) tilesRequested = false
-        send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn))
+        send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))
         flashHint(if (auto) R.string.hint_codec_auto else if (on) R.string.hint_codec_tiles else R.string.hint_codec_h264)
     }
 

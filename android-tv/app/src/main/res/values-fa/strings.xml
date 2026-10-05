@@ -58,4 +58,6 @@
     <string name="hint_codec_h264">حالت H.264</string>
     <string name="menu_sound_on">صدا: خاموش → روشن کن</string>
     <string name="menu_sound_off">صدا: روشن → خاموش کن</string>
+    <string name="menu_mute_host_on">قطع صدای خود رایانه: خاموش → روشن کن</string>
+    <string name="menu_mute_host_off">قطع صدای خود رایانه: روشن → خاموش کن</string>
 </resources>

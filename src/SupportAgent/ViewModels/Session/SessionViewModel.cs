@@ -55,6 +55,15 @@ public partial class SessionViewModel : ViewModelBase
     // Output resolution requested from the remote PC (Auto follows quality; 4K needs a fast PC and network)
     public string[] ResolutionOptions { get; } = ["Auto", "1080p", "1440p", "4K"];
     [ObservableProperty] private string _streamResolution = "Auto";
+
+    // Remote sound: 0 off, 1 play here, 2 play here and mute the remote PC (last choice is remembered)
+    [ObservableProperty] private int _streamAudioMode = SupportAgent.Services.Implementation.ViewerPrefs.AudioMode;
+    public string[] AudioModeOptions => new[]
+    {
+        _localization.GetString("Sound_Off"),
+        _localization.GetString("Sound_Here"),
+        _localization.GetString("Sound_HereMute")
+    };
     private static int ResolutionToWidth(string value) => value switch
     {
         "1080p" => 1920,
@@ -95,6 +104,7 @@ public partial class SessionViewModel : ViewModelBase
         _session.SessionEnded += OnSessionEnded;
         _session.LogMessage += OnLogMessage;
         _session.FileTransferProgress += OnFileTransferProgress;
+        _session.SetAudioMode(StreamAudioMode); // also (re)sends the stream settings
         _ = _session.SendStreamSettingsAsync(StreamFps, StreamQuality, ResolutionToWidth(StreamResolution));
     }
 
@@ -116,6 +126,13 @@ public partial class SessionViewModel : ViewModelBase
     partial void OnIsClipboardEnabledChanged(bool value) => _session?.SetClipboardSync(value);
     partial void OnStreamFpsChanged(int value) => _ = _session?.SendStreamSettingsAsync(value, StreamQuality);
     partial void OnStreamQualityChanged(int value) => _ = _session?.SendStreamSettingsAsync(StreamFps, value);
+    partial void OnStreamAudioModeChanged(int value)
+    {
+        if (value < 0) return;
+        SupportAgent.Services.Implementation.ViewerPrefs.AudioMode = value;
+        _session?.SetAudioMode(value);
+    }
+
     partial void OnStreamResolutionChanged(string value) =>
         _ = _session?.SendStreamSettingsAsync(StreamFps, StreamQuality, ResolutionToWidth(value));
     partial void OnIsConnectedChanged(bool value)
@@ -520,6 +537,7 @@ public partial class SessionViewModel : ViewModelBase
     public string TransfersLabel => _localization.GetString("Session_FileTransfer");
     public string StreamFpsLabel => _localization.GetString("Session_StreamFps");
     public string StreamQualityLabel => _localization.GetString("Session_StreamQuality");
+    public string StreamSoundLabel => _localization.GetString("Session_Sound");
     public string StreamResolutionLabel => _localization.GetString("Session_StreamResolution");
 
     public async ValueTask DisposeAsync()

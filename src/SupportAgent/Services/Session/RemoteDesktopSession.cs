@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
+using RemoteSupport.Shared.Audio;
 using RemoteSupport.Shared.Clipboard;
 using RemoteSupport.Shared.Diagnostics;
 using RemoteSupport.Shared.RemoteInput;
@@ -47,6 +48,8 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private int _streamFps = 20;
     private int _streamQuality = 55;
     private int _streamMaxWidth; // 0 = automatic
+    private int _audioMode;     // 0 off, 1 play here, 2 play here + mute the remote PC's speakers
+    private PcmAudioPlayer? _audioPlayer;
 
     public event EventHandler<FileTransferProgressEventArgs>? FileTransferProgress;
 
@@ -263,6 +266,8 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                     ["Quality"] = _streamQuality.ToString(),
                     ["quality"] = _streamQuality.ToString(),
                     ["FastEncode"] = "1", // multi-threaded encoder on the remote PC (auto-falls back if unsupported)
+                    ["Audio"] = _audioMode > 0 ? "1" : "0",
+                    ["MuteHost"] = _audioMode == 2 ? "1" : "0",
                     ["MaxWidth"] = _streamMaxWidth.ToString(),
                     ["maxWidth"] = _streamMaxWidth.ToString()
                 }
@@ -397,6 +402,10 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                 HandleScreenFrame(envelope.Payload);
                 break;
 
+            case TransportMessageType.Audio:
+                HandleAudio(envelope.Payload);
+                break;
+
             case TransportMessageType.Clipboard:
                 HandleClipboardMessage(envelope.Payload);
                 break;
@@ -501,6 +510,27 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
         {
             Interlocked.Increment(ref _inputSendFailures);
         }
+    }
+
+    private void HandleAudio(ReadOnlyMemory<byte> payload)
+    {
+        if (_audioMode == 0 || payload.Length == 0) return;
+        var packet = AudioPacket.Deserialize(payload.ToArray());
+        if (packet is null) return;
+        _audioPlayer ??= new PcmAudioPlayer();
+        _audioPlayer.Play(packet);
+    }
+
+    /// <summary>Chooses what happens with the remote PC's sound and tells the remote PC (persisted by the caller).</summary>
+    public void SetAudioMode(int mode)
+    {
+        _audioMode = Math.Clamp(mode, 0, 2);
+        if (_audioMode == 0)
+        {
+            _audioPlayer?.Dispose();
+            _audioPlayer = null;
+        }
+        _ = SendStreamSettingsAsync(_streamFps, _streamQuality);
     }
 
     private void HandleClipboardMessage(ReadOnlyMemory<byte> payload)
@@ -610,6 +640,8 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             }
 
             _sessionCts?.Cancel();
+            _audioPlayer?.Dispose();
+            _audioPlayer = null;
 
             _clipboardManager.RevokeConsent();
             _clipboardManager.TextReceived -= OnOsClipboardText;

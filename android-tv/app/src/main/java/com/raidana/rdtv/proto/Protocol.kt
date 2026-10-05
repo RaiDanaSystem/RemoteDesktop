@@ -159,7 +159,7 @@ object Proto {
     fun char(c: Char) = input(IN_CHAR, ch = c)
 
     /** @param maxWidth 0 = automatic (follows quality); up to 3840 for 4K. */
-    fun streamSettings(fps: Int, quality: Int, maxWidth: Int = 0, codec: String = "h264", audio: Boolean = true): ByteArray {
+    fun streamSettings(fps: Int, quality: Int, maxWidth: Int = 0, codec: String = "h264", audio: Boolean = true, muteHost: Boolean = false): ByteArray {
         val meta = JSONObject()
             .put("Fps", fps.toString()).put("fps", fps.toString())
             .put("Quality", quality.toString()).put("quality", quality.toString())
@@ -168,6 +168,7 @@ object Proto {
             .put("ColorFix", "1") // encode with correct R/B order (hardware decoders show the stream as-is)
             .put("FastEncode", "1") // multi-threaded encoder on the PC
             .put("Audio", if (audio) "1" else "0")
+            .put("MuteHost", if (muteHost) "1" else "0") // silence the PC's own speakers while streaming its sound
         val j = JSONObject()
             .put("action", CTL_STREAM_SETTINGS)
             .put("fps", fps)

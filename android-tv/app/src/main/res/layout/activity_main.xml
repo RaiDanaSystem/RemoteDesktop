@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#FF0E1116">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/title"
+            android:textColor="#FFFFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/subtitle"
+            android:textColor="#FF9CA3AF"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:layout_width="480dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/server"
+                style="@style/Field"
+                android:hint="@string/hint_server"
+                android:imeOptions="actionNext|flagNoExtractUi"
+                android:inputType="textUri"
+                android:nextFocusDown="@+id/user" />
+
+            <EditText
+                android:id="@+id/user"
+                style="@style/Field"
+                android:hint="@string/hint_user"
+                android:imeOptions="actionNext|flagNoExtractUi"
+                android:inputType="text"
+                android:nextFocusDown="@+id/pass" />
+
+            <EditText
+                android:id="@+id/pass"
+                style="@style/Field"
+                android:hint="@string/hint_pass"
+                android:imeOptions="actionNext|flagNoExtractUi"
+                android:inputType="textPassword"
+                android:nextFocusDown="@+id/code" />
+
+            <EditText
+                android:id="@+id/code"
+                style="@style/Field"
+                android:hint="@string/hint_code"
+                android:imeOptions="actionDone|flagNoExtractUi"
+                android:inputType="textCapCharacters|textNoSuggestions"
+                android:nextFocusDown="@+id/connect" />
+
+            <Button
+                android:id="@+id/connect"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_bg"
+                android:text="@string/connect"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFFFF"
+                android:textSize="20sp" />
+
+            <TextView
+                android:id="@+id/error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:textColor="#FFF87171"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

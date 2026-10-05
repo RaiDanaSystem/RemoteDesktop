@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ریموت دسکتاپ تی‌وی</string>
+    <string name="title">ریموت دسکتاپ</string>
+    <string name="subtitle">تصویر کامپیوتر ویندوزی را روی تلویزیون ببینید</string>
+    <string name="hint_server">سرور (مثال: 192.168.1.10:5096)</string>
+    <string name="hint_user">نام کاربری</string>
+    <string name="hint_pass">رمز عبور</string>
+    <string name="hint_code">کد پشتیبانی نمایش‌داده‌شده روی کامپیوتر</string>
+    <string name="connect">اتصال</string>
+    <string name="err_fill_all">همه‌ی فیلدها را پر کنید.</string>
+
+    <string name="status_starting">در حال شروع…</string>
+    <string name="status_login">در حال ورود…</string>
+    <string name="status_connecting">در حال تماس با کامپیوتر…</string>
+    <string name="status_waiting">منتظر تأیید «%1$s» هستیم…\nاتصال را روی کامپیوتر ویندوزی تأیید کنید.</string>
+    <string name="status_rtc">در حال برقراری اتصال مستقیم…</string>
+    <string name="err_rejected">کامپیوتر اتصال را رد کرد یا نشست پایان یافت.</string>
+    <string name="err_timeout">کامپیوتر به موقع اتصال را تأیید نکرد.</string>
+    <string name="err_rtc_timeout">اتصال مستقیم به کامپیوتر برقرار نشد. مطمئن شوید هر دو در یک شبکه‌اند و فایروال UDP را مسدود نکرده است.</string>
+    <string name="err_pc_ended">کامپیوتر نشست را پایان داد.</string>
+
+    <string name="hint_controls">جهت‌ها: حرکت نشانگر · OK: کلیک · بازگشت/منو: منو · قرمز / پخش: کلیک راست · سبز: حالت اسکرول · CH+/CH−: اسکرول</string>
+    <string name="scroll_on">حالت اسکرول روشن (بالا/پایین اسکرول می‌کند)</string>
+    <string name="scroll_off">حالت اسکرول خاموش</string>
+
+    <string name="menu_right_click">کلیک راست</string>
+    <string name="menu_double_click">دابل کلیک</string>
+    <string name="menu_scroll_on">حالت اسکرول: روشن</string>
+    <string name="menu_scroll_off">حالت اسکرول: خاموش</string>
+    <string name="menu_type">تایپ متن…</string>
+    <string name="menu_quality_max">کیفیت: حداکثر (۳۰ فریم)</string>
+    <string name="menu_quality_balanced">کیفیت: متوازن</string>
+    <string name="menu_quality_low">کیفیت: کم‌مصرف</string>
+    <string name="menu_remote_cursor_on">نمایش نشانگر PC در تصویر: روشن</string>
+    <string name="menu_remote_cursor_off">نمایش نشانگر PC در تصویر: خاموش</string>
+    <string name="menu_stats_on">نمایش آمار</string>
+    <string name="menu_stats_off">پنهان کردن آمار</string>
+    <string name="menu_disconnect">قطع اتصال</string>
+    <string name="menu_close">بستن منو</string>
+    <string name="type_hint">متنی که روی کامپیوتر تایپ می‌شود</string>
+    <string name="send">ارسال</string>
+</resources>

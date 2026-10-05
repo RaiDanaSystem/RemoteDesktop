@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Remote Desktop TV</string>
+    <string name="title">Remote Desktop</string>
+    <string name="subtitle">Show your Windows PC on this TV</string>
+    <string name="hint_server">Server (e.g. 192.168.1.10:5096)</string>
+    <string name="hint_user">Username</string>
+    <string name="hint_pass">Password</string>
+    <string name="hint_code">Support code shown on the PC</string>
+    <string name="connect">Connect</string>
+    <string name="err_fill_all">Please fill in all fields.</string>
+
+    <string name="status_starting">Starting…</string>
+    <string name="status_login">Signing in…</string>
+    <string name="status_connecting">Contacting the PC…</string>
+    <string name="status_waiting">Waiting for “%1$s” to accept the connection…\nConfirm it on the Windows PC.</string>
+    <string name="status_rtc">Establishing a direct connection…</string>
+    <string name="err_rejected">The PC rejected or ended the session.</string>
+    <string name="err_timeout">The PC did not accept in time.</string>
+    <string name="err_rtc_timeout">Could not establish a direct connection to the PC. Check that both are on the same network and the firewall allows UDP.</string>
+    <string name="err_pc_ended">The PC ended the session.</string>
+
+    <string name="hint_controls">D-pad: move cursor · OK: click · Back/Menu: menu · Red / Play: right-click · Green: scroll mode · CH+/CH−: scroll</string>
+    <string name="scroll_on">Scroll mode ON (Up/Down scroll)</string>
+    <string name="scroll_off">Scroll mode OFF</string>
+
+    <string name="menu_right_click">Right click</string>
+    <string name="menu_double_click">Double click</string>
+    <string name="menu_scroll_on">Scroll mode: ON</string>
+    <string name="menu_scroll_off">Scroll mode: OFF</string>
+    <string name="menu_type">Type text…</string>
+    <string name="menu_quality_max">Quality: Max (30 fps)</string>
+    <string name="menu_quality_balanced">Quality: Balanced</string>
+    <string name="menu_quality_low">Quality: Low bandwidth</string>
+    <string name="menu_remote_cursor_on">Show PC cursor in video: ON</string>
+    <string name="menu_remote_cursor_off">Show PC cursor in video: OFF</string>
+    <string name="menu_stats_on">Show statistics</string>
+    <string name="menu_stats_off">Hide statistics</string>
+    <string name="menu_disconnect">Disconnect</string>
+    <string name="menu_close">Close menu</string>
+    <string name="type_hint">Text to type on the PC</string>
+    <string name="send">Send</string>
+</resources>

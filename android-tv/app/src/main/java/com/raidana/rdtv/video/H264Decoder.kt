@@ -136,6 +136,14 @@ class H264Decoder(
         return "${e.javaClass.simpleName} ${e.message ?: ""}"
     }
 
+    private var errorStreak = 0
+
+    /** Two codec errors in a row without any picture: don't wait for the watchdog, switch decoder now. */
+    private fun noteError() {
+        errorStreak++
+        if (errorStreak >= 2 && escalate()) errorStreak = 0
+    }
+
     /** Set by the output thread after a non-recoverable codec error; the next keyframe restarts the codec. */
     @Volatile private var restartRequested = false
 
@@ -175,6 +183,7 @@ class H264Decoder(
         } catch (e: Exception) {
             lastError = "feed: ${describeError(e)}"
             errors.incrementAndGet()
+            noteError()
             stopCodec()
             return false
         }
@@ -226,10 +235,12 @@ class H264Decoder(
                 if (i >= 0) {
                     c.releaseOutputBuffer(i, true)
                     rendered.incrementAndGet()
+                    errorStreak = 0
                 }
             } catch (e: MediaCodec.CodecException) {
                 errors.incrementAndGet()
                 lastError = "codec: ${describeError(e)}"
+                noteError()
                 if (!e.isTransient) { restartRequested = true; break }
             } catch (e: Exception) {
                 // stopCodec() racing with this thread is expected; anything else needs a restart.

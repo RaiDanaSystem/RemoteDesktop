@@ -136,7 +136,9 @@ public class ScreenStreamingManager : IScreenStreamingManager
                         // twice a second so keyframes/recovery keep working.
                         var hash = frame.Format == FrameFormat.RawBgra ? QuickHash(frame) : 0UL;
                         var now = Environment.TickCount64;
-                        var same = hash != 0 && hash == lastHash && now - lastSignalTick < 500;
+                        // H.264 decoders hold back output until more input arrives, so keep a steady trickle (~15 fps) on idle screens.
+                        var heartbeatMs = PreferTiles ? 500 : 66;
+                        var same = hash != 0 && hash == lastHash && now - lastSignalTick < heartbeatMs;
                         lastHash = hash;
                         if (same)
                         {
@@ -158,8 +160,10 @@ public class ScreenStreamingManager : IScreenStreamingManager
                     }
 
                     // Idle screen: poll at ~7 fps instead of the full rate until something changes.
-                    if (staticFrames >= 8 && interval < TimeSpan.FromMilliseconds(140))
-                        interval = TimeSpan.FromMilliseconds(140);
+                    {
+                        var idle = TimeSpan.FromMilliseconds(PreferTiles ? 140 : 66);
+                        if (staticFrames >= 8 && interval < idle) interval = idle;
+                    }
 
                     var elapsed = sw.Elapsed;
                     if (elapsed < interval)
@@ -189,6 +193,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
                     if (pending.Count >= maxQueue)
                     {
                         _droppedFrames++;
+                        (_capture as Capture.GdiScreenCapture)?.Recycle(frame.FrameBytes);
                         continue;
                     }
 

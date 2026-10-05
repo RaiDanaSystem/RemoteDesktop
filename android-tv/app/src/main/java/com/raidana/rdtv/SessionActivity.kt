@@ -152,6 +152,10 @@ class SessionActivity : Activity(), RtcSession.Listener {
         showStats = prefs.getBoolean("showStats", true)
         soundOn = prefs.getBoolean("soundOn", true)
         remoteCursor = prefs.getBoolean("remoteCursor", false)
+        fps = prefs.getInt("fps", 30)
+        quality = prefs.getInt("quality", 80)
+        maxWidth = prefs.getInt("maxWidth", 0)
+        codecMode = if (prefs.getBoolean("compat", false)) "tiles" else "h264"
         setContentView(R.layout.activity_session)
         screen = findViewById(R.id.screen)
         statusText = findViewById(R.id.status)
@@ -504,7 +508,7 @@ class SessionActivity : Activity(), RtcSession.Listener {
         if (d != null && codecMode == "h264") {
             val au = auCount.get()
             val r = d.rendered.get()
-            if (au - lastAu >= 3 && r == lastRenderedForWatchdog) stuckSeconds++ else stuckSeconds = 0
+            if (au - lastAu >= 1 && r == lastRenderedForWatchdog) stuckSeconds++ else if (au == lastAu) { /* idle screen: nothing to judge */ } else stuckSeconds = 0
             lastAu = au; lastRenderedForWatchdog = r
             if (stuckSeconds >= 3) {
                 stuckSeconds = 0
@@ -901,12 +905,14 @@ class SessionActivity : Activity(), RtcSession.Listener {
 
     private fun applyQuality(f: Int, q: Int, w: Int) {
         fps = f; quality = q; maxWidth = w
+        prefs.edit().putInt("fps", f).putInt("quality", q).putInt("maxWidth", w).apply() // remembered for next time
         send(Proto.streamSettings(f, q, w, codecMode, soundOn, muteHost))
     }
 
     /** Compatibility mode: the PC sends JPEG tiles instead of H.264 (software path, works everywhere). */
     private fun setCompatibilityMode(on: Boolean, auto: Boolean) {
         codecMode = if (on) "tiles" else "h264"
+        if (!auto) prefs.edit().putBoolean("compat", on).apply() // only a manual choice is remembered
         stuckSeconds = 0
         if (!on) tilesRequested = false
         send(Proto.streamSettings(fps, quality, maxWidth, codecMode, soundOn, muteHost))

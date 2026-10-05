@@ -45,6 +45,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private FileTransferMessage? _pendingOffer;
     private int _streamFps = 20;
     private int _streamQuality = 55;
+    private int _streamMaxWidth; // 0 = derive from quality; up to 3840 (4K)
 
     public event EventHandler<IncomingFileOfferEventArgs>? IncomingFileOffered;
 
@@ -235,7 +236,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
 
             var tileOptions = new RemoteSupport.Shared.ScreenStreaming.Tiling.TileStreamingOptions
             {
-                MaxWidth = MaxWidthForQuality(_streamQuality),
+                MaxWidth = _streamMaxWidth > 0 ? _streamMaxWidth : MaxWidthForQuality(_streamQuality),
                 JpegQuality = _streamQuality,
                 TileSize = 96,
                 KeyframeIntervalFrames = Math.Max(_streamFps, 15)
@@ -250,7 +251,10 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             _screenStreaming = new ScreenStreamingManager(
                 capture, encoder,
                 _loggerFactory.CreateLogger<ScreenStreamingManager>(),
-                tileOptions);
+                tileOptions)
+            {
+                Direct = _sessionManager.IsDirect
+            };
 
             var result = await _screenStreaming.StartStreamingAsync(
                 _sessionId.ToString(),
@@ -516,12 +520,24 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             }
         }
 
+        if (control.Metadata is not null)
+        {
+            foreach (var key in new[] { "MaxWidth", "maxWidth" })
+            {
+                if (control.Metadata.TryGetValue(key, out var mwText) && int.TryParse(mwText, out var mw))
+                {
+                    _streamMaxWidth = mw <= 0 ? 0 : Math.Clamp(mw, 640, 3840);
+                    break;
+                }
+            }
+        }
+
         if (fps.HasValue)
-            _streamFps = Math.Clamp(fps.Value, 5, 30);
+            _streamFps = Math.Clamp(fps.Value, 5, 60);
         if (quality.HasValue)
             _streamQuality = Math.Clamp(quality.Value, 20, 80);
 
-        var maxWidth = MaxWidthForQuality(_streamQuality);
+        var maxWidth = _streamMaxWidth > 0 ? _streamMaxWidth : MaxWidthForQuality(_streamQuality);
         if (_gdiCapture is not null)
             _gdiCapture.MaxWidth = maxWidth;
 

@@ -1,0 +1,29 @@
+name: Windows app build
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build SupportAgent (includes Shared + CustomerAgent)
+        run: dotnet build src/SupportAgent/SupportAgent.csproj -c Release -nologo
+
+      - name: Publish SupportAgent
+        run: dotnet publish src/SupportAgent/SupportAgent.csproj -c Release -r win-x64 --self-contained false -o publish/SupportAgent -nologo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SupportAgent-win-x64
+          path: publish/SupportAgent

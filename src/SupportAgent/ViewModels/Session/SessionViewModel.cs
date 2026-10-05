@@ -49,8 +49,19 @@ public partial class SessionViewModel : ViewModelBase
     [ObservableProperty] private int _streamFps = 20;
     [ObservableProperty] private int _streamQuality = 55;
 
-    public int[] FpsOptions { get; } = [8, 10, 12, 15, 20, 24, 30];
-    public int[] QualityOptions { get; } = [25, 35, 45, 55, 65, 75];
+    public int[] FpsOptions { get; } = [8, 10, 12, 15, 20, 24, 30, 45, 60];
+    public int[] QualityOptions { get; } = [25, 35, 45, 55, 65, 75, 80];
+
+    // Output resolution requested from the remote PC (Auto follows quality; 4K needs a fast PC and network)
+    public string[] ResolutionOptions { get; } = ["Auto", "1080p", "1440p", "4K"];
+    [ObservableProperty] private string _streamResolution = "Auto";
+    private static int ResolutionToWidth(string value) => value switch
+    {
+        "1080p" => 1920,
+        "1440p" => 2560,
+        "4K" => 3840,
+        _ => 0
+    };
 
     // Chat
     [ObservableProperty] private string _chatInput = string.Empty;
@@ -84,7 +95,7 @@ public partial class SessionViewModel : ViewModelBase
         _session.SessionEnded += OnSessionEnded;
         _session.LogMessage += OnLogMessage;
         _session.FileTransferProgress += OnFileTransferProgress;
-        _ = _session.SendStreamSettingsAsync(StreamFps, StreamQuality);
+        _ = _session.SendStreamSettingsAsync(StreamFps, StreamQuality, ResolutionToWidth(StreamResolution));
     }
 
     public void DetachSession()
@@ -105,6 +116,8 @@ public partial class SessionViewModel : ViewModelBase
     partial void OnIsClipboardEnabledChanged(bool value) => _session?.SetClipboardSync(value);
     partial void OnStreamFpsChanged(int value) => _ = _session?.SendStreamSettingsAsync(value, StreamQuality);
     partial void OnStreamQualityChanged(int value) => _ = _session?.SendStreamSettingsAsync(StreamFps, value);
+    partial void OnStreamResolutionChanged(string value) =>
+        _ = _session?.SendStreamSettingsAsync(StreamFps, StreamQuality, ResolutionToWidth(value));
     partial void OnIsConnectedChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowConnectingOverlay));
@@ -487,6 +500,7 @@ public partial class SessionViewModel : ViewModelBase
         OnPropertyChanged(nameof(TransfersLabel));
         OnPropertyChanged(nameof(StreamFpsLabel));
         OnPropertyChanged(nameof(StreamQualityLabel));
+        OnPropertyChanged(nameof(StreamResolutionLabel));
     }
 
     public string SessionTimerLabel => string.Format(_localization.GetString("Session_Timer"), SessionDuration);
@@ -506,6 +520,7 @@ public partial class SessionViewModel : ViewModelBase
     public string TransfersLabel => _localization.GetString("Session_FileTransfer");
     public string StreamFpsLabel => _localization.GetString("Session_StreamFps");
     public string StreamQualityLabel => _localization.GetString("Session_StreamQuality");
+    public string StreamResolutionLabel => _localization.GetString("Session_StreamResolution");
 
     public async ValueTask DisposeAsync()
     {

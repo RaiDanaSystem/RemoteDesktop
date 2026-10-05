@@ -6,6 +6,7 @@ using Serilog;
 using Serilog.Extensions.Logging;
 using RemoteSupport.Shared;
 using SupportAgent.Configuration;
+using SupportAgent.Services.Direct;
 using SupportAgent.Services.Implementation;
 using SupportAgent.Services.Interfaces;
 using SupportAgent.ViewModels;
@@ -50,6 +51,7 @@ public partial class App : Application
         services.AddSingleton(Options);
         services.AddSingleton(endpointStore);
         services.AddSingleton<ILocalizationService, LocalizationService>();
+        services.AddSingleton<LanService>();
         services.AddTransient<ShellViewModel>();
         services.AddTransient<ShellWindow>();
         _serviceProvider = services.BuildServiceProvider();
@@ -57,8 +59,17 @@ public partial class App : Application
         var localization = _serviceProvider.GetRequiredService<ILocalizationService>();
         localization.SetLanguage("en");
 
+        // Server-less LAN mode: advertise this PC and accept direct viewers while the app is open.
+        _serviceProvider.GetRequiredService<LanService>().Start();
+
         var window = _serviceProvider.GetRequiredService<ShellWindow>();
         MainWindow = window;
         window.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try { _serviceProvider?.GetService<LanService>()?.Dispose(); } catch { }
+        base.OnExit(e);
     }
 }

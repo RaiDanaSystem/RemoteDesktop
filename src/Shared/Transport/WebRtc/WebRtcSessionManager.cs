@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using RemoteSupport.Shared.Transport.Direct;
 using SIPSorcery.Net;
 
 namespace RemoteSupport.Shared.Transport.WebRtc;
@@ -17,15 +18,21 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
     private readonly ILogger<WebRtcSessionManager> _logger;
 
     private WebRtcPeer? _peer;
+    private TcpDataChannel? _direct;
     private Guid _sessionId;
     private bool _isInitiator;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private bool _disposed;
 
-    public DataChannelState State => _peer?.State ?? DataChannelState.New;
-    public string? PeerId => _peer?.PeerId;
-    public bool IsConnected => _peer?.State == DataChannelState.Connected;
-    public IDataChannel? Channel => _peer;
+    public DataChannelState State => _direct?.State ?? _peer?.State ?? DataChannelState.New;
+    public string? PeerId => _direct?.PeerId ?? _peer?.PeerId;
+    public bool IsConnected => _direct is not null
+        ? _direct.State == DataChannelState.Connected
+        : _peer?.State == DataChannelState.Connected;
+    public IDataChannel? Channel => (IDataChannel?)_direct ?? _peer;
+
+    /// <summary>True when the session runs over a server-less LAN TCP channel instead of WebRTC.</summary>
+    public bool IsDirect => _direct is not null;
     public bool IsSignalingConnected => _signalingClient.IsConnected;
 
     public event EventHandler? Connected;
@@ -125,10 +132,45 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
     }
 
     /// <summary>
+    /// Uses an already-accepted server-less LAN channel as the transport for this session.
+    /// Feature managers keep using <see cref="SendAsync"/> / <see cref="TransportMessageReceived"/> unchanged.
+    /// Raises <see cref="Connected"/> once the channel is started.
+    /// </summary>
+    public async Task AttachDirectChannelAsync(TcpDataChannel channel, bool isInitiator)
+    {
+        await ResetPeerAsync();
+        _isInitiator = isInitiator;
+        _direct = channel;
+
+        channel.MessageReceived += OnPeerMessageReceived;
+        channel.Error += (_, ex) => { if (ReferenceEquals(_direct, channel)) Error?.Invoke(this, ex); };
+        channel.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_direct, channel)) return;
+            _logger.LogInformation("Direct channel closed");
+            Disconnected?.Invoke(this, EventArgs.Empty);
+        };
+        channel.Opened += (_, _) =>
+        {
+            if (!ReferenceEquals(_direct, channel)) return;
+            LogMessage?.Invoke(this, "Direct LAN channel connected");
+            Connected?.Invoke(this, EventArgs.Empty);
+        };
+        channel.Start();
+    }
+
+    /// <summary>
     /// Closes the current WebRTC peer without disposing signaling, so a new session can reuse this manager.
     /// </summary>
     public async Task ResetPeerAsync()
     {
+        var direct = _direct;
+        _direct = null;
+        if (direct is not null)
+        {
+            try { await direct.DisposeAsync(); } catch { }
+        }
+
         var peer = _peer;
         _peer = null;
         if (peer is null) return;
@@ -160,7 +202,8 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
     /// </summary>
     public Task SendPingAsync(CancellationToken cancellationToken = default)
     {
-        if (_peer is null || _peer.State != DataChannelState.Connected)
+        var channel = Channel;
+        if (channel is null || channel.State != DataChannelState.Connected)
         {
             _logger.LogWarning("Cannot send ping: not connected");
             return Task.CompletedTask;
@@ -174,7 +217,7 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
             Payload = payload
         };
 
-        return _peer.SendAsync(envelope.Serialize(), cancellationToken);
+        return channel.SendAsync(envelope.Serialize(), cancellationToken);
     }
 
     /// <summary>
@@ -182,7 +225,8 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
     /// </summary>
     public Task SendAsync(TransportMessageType messageType, byte[] payload, CancellationToken cancellationToken = default)
     {
-        if (_peer is null || _peer.State != DataChannelState.Connected)
+        var channel = Channel;
+        if (channel is null || channel.State != DataChannelState.Connected)
         {
             _logger.LogWarning("Cannot send: not connected (type={Type})", messageType);
             return Task.CompletedTask;
@@ -194,7 +238,7 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
             Payload = payload
         };
 
-        return _peer.SendAsync(envelope.Serialize(), cancellationToken);
+        return channel.SendAsync(envelope.Serialize(), cancellationToken);
     }
 
     /// <summary>
@@ -396,6 +440,13 @@ public sealed class WebRtcSessionManager : IAsyncDisposable
 
         try
         {
+            if (_direct is not null)
+            {
+                var d = _direct;
+                _direct = null;
+                await d.DisposeAsync();
+            }
+
             if (_peer is not null && _peer.PeerId is not null)
             {
                 await _signalingClient.ClosePeerConnectionAsync(_sessionId, _peer.PeerId);

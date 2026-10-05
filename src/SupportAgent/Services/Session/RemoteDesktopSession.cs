@@ -11,6 +11,7 @@ using RemoteSupport.Shared.ScreenStreaming;
 using RemoteSupport.Shared.ScreenStreaming.Encoding;
 using RemoteSupport.Shared.Transport;
 using RemoteSupport.Shared.Transport.Messages;
+using RemoteSupport.Shared.Transport.Direct;
 using RemoteSupport.Shared.Transport.WebRtc;
 using RemoteSupport.Shared.FileTransfer;
 using SupportAgent.Services.Input;
@@ -45,6 +46,7 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     private bool _clipboardSyncEnabled = true;
     private int _streamFps = 20;
     private int _streamQuality = 55;
+    private int _streamMaxWidth; // 0 = automatic
 
     public event EventHandler<FileTransferProgressEventArgs>? FileTransferProgress;
 
@@ -120,9 +122,25 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
     /// <summary>
     /// Initiates a remote desktop session with the CustomerAgent.
     /// </summary>
-    public async Task StartSessionAsync(Guid sessionId, string customerDevice,
+    public Task StartSessionAsync(Guid sessionId, string customerDevice,
         Action<BitmapSource> onFrameRendered, UIElement? captureElement = null,
         CancellationToken cancellationToken = default)
+        => StartCoreAsync(sessionId, onFrameRendered, captureElement,
+            () => _sessionManager.ConnectAsOffererAsync(sessionId, cancellationToken),
+            "Initiated WebRTC connection as offerer");
+
+    /// <summary>
+    /// Starts a session over a server-less LAN TCP channel that was accepted by the remote PC.
+    /// </summary>
+    public Task StartDirectSessionAsync(Guid sessionId, TcpDataChannel channel,
+        Action<BitmapSource> onFrameRendered, UIElement? captureElement = null)
+        => StartCoreAsync(sessionId, onFrameRendered, captureElement,
+            () => _sessionManager.AttachDirectChannelAsync(channel, isInitiator: true),
+            "Started direct LAN session");
+
+    private async Task StartCoreAsync(Guid sessionId,
+        Action<BitmapSource> onFrameRendered, UIElement? captureElement,
+        Func<Task> connectAsync, string startedMessage)
     {
         _sessionId = sessionId;
         _sessionCts = new CancellationTokenSource();
@@ -158,8 +176,8 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
             SetCaptureTarget(captureElement, restartMouse: true);
         }
 
-        await _sessionManager.ConnectAsOffererAsync(sessionId, cancellationToken);
-        Log("Initiated WebRTC connection as offerer");
+        await connectAsync();
+        Log(startedMessage);
         _ = RunPingLoopAsync(_sessionCts.Token);
 
         SessionStarted?.Invoke(this, EventArgs.Empty);
@@ -223,10 +241,13 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
         catch { }
     }
 
-    public async Task SendStreamSettingsAsync(int fps, int quality)
+    /// <param name="maxWidth">0 = automatic (derived from quality); otherwise 640..3840 (e.g. 3840 for 4K).</param>
+    public async Task SendStreamSettingsAsync(int fps, int quality, int? maxWidth = null)
     {
-        _streamFps = Math.Clamp(fps, 5, 30);
+        _streamFps = Math.Clamp(fps, 5, 60);
         _streamQuality = Math.Clamp(quality, 20, 80);
+        if (maxWidth.HasValue)
+            _streamMaxWidth = maxWidth.Value <= 0 ? 0 : Math.Clamp(maxWidth.Value, 640, 3840);
         if (!IsConnected) return;
         try
         {
@@ -240,11 +261,13 @@ public sealed class RemoteDesktopSession : IAsyncDisposable
                     ["Fps"] = _streamFps.ToString(),
                     ["fps"] = _streamFps.ToString(),
                     ["Quality"] = _streamQuality.ToString(),
-                    ["quality"] = _streamQuality.ToString()
+                    ["quality"] = _streamQuality.ToString(),
+                    ["MaxWidth"] = _streamMaxWidth.ToString(),
+                    ["maxWidth"] = _streamMaxWidth.ToString()
                 }
             };
             await _sessionManager.SendAsync(TransportMessageType.Control, control.Serialize());
-            Log($"Requested stream fps={_streamFps} quality={_streamQuality}");
+            Log($"Requested stream fps={_streamFps} quality={_streamQuality} maxWidth={_streamMaxWidth}");
         }
         catch { }
     }

@@ -30,6 +30,9 @@ public class ScreenStreamingManager : IScreenStreamingManager
     private long _totalBytesSent;
 
     public bool IsStreaming => _isStreaming;
+
+    /// <summary>True when frames go over a server-less LAN TCP channel (bigger send bursts, higher bitrates).</summary>
+    public bool Direct { get; set; }
     public event Action<FrameData>? FrameCaptured;
     public event Action<string>? StreamingStateChanged;
 
@@ -79,15 +82,16 @@ public class ScreenStreamingManager : IScreenStreamingManager
         _h264Unavailable = false;
         _tileOptions.JpegQuality = quality;
         _jpegQuality = Math.Clamp(quality, 20, 80);
-        _targetFps = Math.Clamp(targetFps, 5, 30);
+        _targetFps = Math.Clamp(targetFps, 5, 60);
         _startedAtUtc = DateTime.UtcNow;
         _streamingCts = new CancellationTokenSource();
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             _streamingCts.Token, cancellationToken);
 
         var pending = new Queue<(FrameFormat Format, byte[] Bytes, FrameData Meta)>();
-        const int maxSendPerTick = 8;
-        const int maxQueue = 36;
+        // Direct (TCP) mode can push many parts per tick; WebRTC data channels need the gentler defaults.
+        var maxSendPerTick = Direct ? 256 : 8;
+        var maxQueue = Direct ? 120 : 36;
 
         _streamingTask = Task.Run(async () =>
         {
@@ -174,7 +178,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
 
     public void ApplySettings(int targetFps, int quality)
     {
-        _targetFps = Math.Clamp(targetFps, 5, 30);
+        _targetFps = Math.Clamp(targetFps, 5, 60);
         _jpegQuality = Math.Clamp(quality, 20, 80);
         _tileOptions.JpegQuality = _jpegQuality;
         Interlocked.Exchange(ref _rebuildEncoder, 1);
@@ -260,7 +264,7 @@ public class ScreenStreamingManager : IScreenStreamingManager
                 _h264 = null;
             }
 
-            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality));
+            _h264 ??= new OpenH264Encoder(frame.Width, frame.Height, fps: _targetFps, bitrate: H264BitrateForQuality(_jpegQuality, frame.Width, frame.Height, Direct));
             if (frame.SequenceNumber == 1 || frame.SequenceNumber % Math.Max(_targetFps, 1) == 0)
                 _h264.RequestKeyframe();
             var annexB = _h264.EncodeBgra(frame.FrameBytes, frame.Width, frame.Height, out var keyframe);
@@ -288,10 +292,16 @@ public class ScreenStreamingManager : IScreenStreamingManager
         }
     }
 
-    private static int H264BitrateForQuality(int quality)
+    private static int H264BitrateForQuality(int quality, int width, int height, bool direct)
     {
         var q = Math.Clamp(quality, 20, 80);
-        return 250_000 + (int)((q - 20) / 60.0 * 4_750_000);
+        var perHd = 250_000 + (int)((q - 20) / 60.0 * 4_750_000);
+        // Scale with pixel count relative to 1080p so 1440p/4K keep the same visual quality.
+        var area = Math.Clamp((double)width * height / (1920.0 * 1080.0), 0.25, 4.5);
+        var bitrate = perHd * area;
+        // On a LAN there is plenty of bandwidth: give high quality settings extra headroom.
+        if (direct && q >= 60) bitrate *= 1.6;
+        return (int)Math.Min(bitrate, 80_000_000);
     }
 
     private void TrackMetrics(double frameTimeMs, int frameBytes)

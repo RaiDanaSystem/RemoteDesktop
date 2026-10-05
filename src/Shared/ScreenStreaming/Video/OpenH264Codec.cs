@@ -13,8 +13,8 @@ public sealed class OpenH264Encoder : IDisposable
 
     public OpenH264Encoder(int width, int height, int fps = 15, int bitrate = 1_500_000)
     {
-        _fps = Math.Clamp(fps, 5, 30);
-        _bitrate = Math.Clamp(bitrate, 250_000, 8_000_000);
+        _fps = Math.Clamp(fps, 5, 60);
+        _bitrate = Math.Clamp(bitrate, 250_000, 80_000_000);
         Reconfigure(Align16(width), Align16(height));
     }
 
@@ -137,15 +137,34 @@ public sealed class OpenH264Decoder : IDisposable
     {
         if (rgb.Length >= width * height * 4)
         {
-            var bgra = new byte[width * height * 4];
-            for (var i = 0; i < width * height; i++)
+            // RGBA -> BGRA with opaque alpha: swap R/B in 32-bit lanes (fast path, parallel for large frames).
+            var count = width * height;
+            var bgra = new byte[count * 4];
+            var src = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(rgb.AsSpan(0, count * 4));
+            var dst = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bgra.AsSpan());
+            if (count < 1_000_000)
             {
-                var s = i * 4;
-                var d = i * 4;
-                bgra[d] = rgb[s + 2];
-                bgra[d + 1] = rgb[s + 1];
-                bgra[d + 2] = rgb[s];
-                bgra[d + 3] = 255;
+                for (var i = 0; i < count; i++)
+                {
+                    var v = src[i];
+                    dst[i] = (v & 0x0000FF00u) | ((v & 0xFFu) << 16) | ((v >> 16) & 0xFFu) | 0xFF000000u;
+                }
+            }
+            else
+            {
+                var srcArr = rgb;
+                Parallel.For(0, 8, part =>
+                {
+                    var from = (int)((long)count * part / 8);
+                    var to = (int)((long)count * (part + 1) / 8);
+                    var s32 = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(srcArr.AsSpan(0, count * 4));
+                    var d32 = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bgra.AsSpan());
+                    for (var i = from; i < to; i++)
+                    {
+                        var v = s32[i];
+                        d32[i] = (v & 0x0000FF00u) | ((v & 0xFFu) << 16) | ((v >> 16) & 0xFFu) | 0xFF000000u;
+                    }
+                });
             }
             return bgra;
         }

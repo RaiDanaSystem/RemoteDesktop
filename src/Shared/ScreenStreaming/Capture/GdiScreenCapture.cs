@@ -18,7 +18,7 @@ public class GdiScreenCapture : IScreenCapture
     public int MaxWidth
     {
         get => _maxWidth;
-        set => _maxWidth = Math.Clamp(value, 640, 1920);
+        set => _maxWidth = Math.Clamp(value, 640, 3840);
     }
     private int _loggedErrors;
 

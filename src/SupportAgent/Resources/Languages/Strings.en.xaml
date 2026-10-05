@@ -127,4 +127,23 @@
     <system:String x:Key="Status_Ready">Ready</system:String>
     <system:String x:Key="Status_Error">Error</system:String>
 
+
+    <!-- Local network (server-less) mode -->
+    <system:String x:Key="Shell_LanTitle">Computers on this network</system:String>
+    <system:String x:Key="Shell_LanBody">No server needed. See other computers running this app on your local network and connect directly.</system:String>
+    <system:String x:Key="Lan_ShareToggle">Let other computers on this network request to view “{0}”</system:String>
+    <system:String x:Key="Lan_Computers">Computers on this network</system:String>
+    <system:String x:Key="Lan_None">No computers found yet. Make sure the app is open on the other PC and both are on the same network, or type its address below.</system:String>
+    <system:String x:Key="Lan_Refresh">Refresh</system:String>
+    <system:String x:Key="Lan_ManualHint">Or type an IP address (e.g. 192.168.1.20)</system:String>
+    <system:String x:Key="Lan_BadAddress">That address could not be understood.</system:String>
+    <system:String x:Key="Lan_WaitingAccept">Waiting for {0} to accept the connection…</system:String>
+    <system:String x:Key="Lan_IncomingTitle">Connection request</system:String>
+    <system:String x:Key="Lan_IncomingBody">“{0}” ({1}) wants to see this computer.&#10;&#10;Yes = view and control&#10;No = view only&#10;Cancel = deny</system:String>
+    <system:String x:Key="Lan_Banner">“{0}” is viewing and controlling this computer.</system:String>
+    <system:String x:Key="Lan_BannerViewOnly">“{0}” is viewing this computer (view only).</system:String>
+    <system:String x:Key="Lan_StopSharing">Stop sharing</system:String>
+    <system:String x:Key="Lan_StartFailed">Local network mode could not start.</system:String>
+    <system:String x:Key="Session_StreamResolution">Resolution</system:String>
+
 </ResourceDictionary>

@@ -68,6 +68,12 @@
                     <ComboBox ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding StreamFps}"
                               Style="{StaticResource Combo.Tool}"
                               Width="64" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StreamResolutionLabel}" Foreground="{StaticResource Brush.Muted}"
+                               FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding StreamResolution}"
+                              Style="{StaticResource Combo.Tool}"
+                              Width="76" Margin="0,0,10,0" VerticalAlignment="Center"
+                              ToolTip="4K needs a fast PC and network (best on a wired LAN)"/>
                     <TextBlock Text="{Binding StreamQualityLabel}" Foreground="{StaticResource Brush.Muted}"
                                FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding StreamQuality}"

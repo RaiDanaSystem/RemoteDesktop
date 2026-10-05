@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using RemoteSupport.Shared;
 using SupportAgent.Configuration;
 using SupportAgent.Models;
+using SupportAgent.Services.Direct;
 using SupportAgent.Services.Interfaces;
 using SupportAgent.Views;
 
@@ -21,6 +22,8 @@ public partial class ShellViewModel : ViewModelBase
     private readonly string _appSettingsUrl;
     private readonly string _supportUsername;
     private readonly string _supportPassword;
+    private readonly LanService _lan;
+    private bool _modeTitleIsLan;
 
     private Action? _customerLanguageSync;
     private IServiceProvider? _modeServices;
@@ -46,6 +49,19 @@ public partial class ShellViewModel : ViewModelBase
     public string SupportCardBody => _localization.GetString("Shell_SupportBody");
     public string CustomerCardTitle => _localization.GetString("Shell_CustomerTitle");
     public string CustomerCardBody => _localization.GetString("Shell_CustomerBody");
+    public string LanCardTitle => _localization.GetString("Shell_LanTitle");
+    public string LanCardBody => _localization.GetString("Shell_LanBody");
+    public string LanShareLabel => string.Format(_localization.GetString("Lan_ShareToggle"), Environment.MachineName);
+
+    public bool LanSharingEnabled
+    {
+        get => _lan.SharingEnabled;
+        set
+        {
+            _lan.SharingEnabled = value;
+            OnPropertyChanged();
+        }
+    }
     public string ServerLabel => _localization.GetString("Shell_ServerLabel");
     public string ServerHint => _localization.GetString("Shell_ServerHint");
     public string SaveServerButton => _localization.GetString("Shell_SaveServer");
@@ -58,8 +74,10 @@ public partial class ShellViewModel : ViewModelBase
         ILocalizationService localization,
         ServerEndpointStore endpointStore,
         ILoggerFactory loggerFactory,
-        AgentOptions bootstrapOptions)
+        AgentOptions bootstrapOptions,
+        LanService lan)
     {
+        _lan = lan;
         _localization = localization;
         _endpointStore = endpointStore;
         _loggerFactory = loggerFactory;
@@ -124,7 +142,49 @@ public partial class ShellViewModel : ViewModelBase
             _supportWorkspace = new SupportWorkspace(provider, session);
             ModeContent = _supportWorkspace;
             IsHome = false;
+            _modeTitleIsLan = false;
             ModeTitle = _localization.GetString("Shell_SupportTitle");
+        }
+        catch (Exception ex)
+        {
+            SetError($"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Server-less mode: list the PCs on this network and connect directly (no login, no server).</summary>
+    [RelayCommand]
+    private async Task EnterLanAsync()
+    {
+        if (!IsHome)
+            return;
+
+        IsBusy = true;
+        ClearError();
+        try
+        {
+            if (_lan.Discovery is null)
+            {
+                SetError(_localization.GetString("Lan_StartFailed") + " " + _lan.StartError);
+                return;
+            }
+
+            var options = CreateOptions();
+            var services = new ServiceCollection();
+            services.AddSingleton(_loggerFactory);
+            SupportComposition.ConfigureServices(services, options, _localization);
+            var provider = services.BuildServiceProvider();
+
+            _modeServices = provider;
+            _supportWorkspace = new SupportWorkspace(provider, null, _lan);
+            ModeContent = _supportWorkspace;
+            IsHome = false;
+            _modeTitleIsLan = true;
+            ModeTitle = _localization.GetString("Shell_LanTitle");
+            await Task.CompletedTask;
         }
         catch (Exception ex)
         {
@@ -299,6 +359,9 @@ public partial class ShellViewModel : ViewModelBase
         OnPropertyChanged(nameof(SupportCardBody));
         OnPropertyChanged(nameof(CustomerCardTitle));
         OnPropertyChanged(nameof(CustomerCardBody));
+        OnPropertyChanged(nameof(LanCardTitle));
+        OnPropertyChanged(nameof(LanCardBody));
+        OnPropertyChanged(nameof(LanShareLabel));
         OnPropertyChanged(nameof(ServerLabel));
         OnPropertyChanged(nameof(ServerHint));
         OnPropertyChanged(nameof(SaveServerButton));
@@ -308,7 +371,7 @@ public partial class ShellViewModel : ViewModelBase
         OnPropertyChanged(nameof(SettingsButton));
         if (!IsHome)
             ModeTitle = _supportWorkspace is not null
-                ? _localization.GetString("Shell_SupportTitle")
+                ? _localization.GetString(_lan.Discovery is not null && _modeTitleIsLan ? "Shell_LanTitle" : "Shell_SupportTitle")
                 : _localization.GetString("Shell_CustomerTitle");
         OnPropertyChanged(nameof(ModeTitle));
     }

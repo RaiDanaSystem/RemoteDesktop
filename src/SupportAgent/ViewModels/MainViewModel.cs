@@ -7,6 +7,9 @@ using SupportAgent.Services.Session;
 using SupportAgent.ViewModels.Session;
 using Microsoft.Extensions.DependencyInjection;
 using RemoteSupport.Shared;
+using System.Collections.ObjectModel;
+using System.Net;
+using SupportAgent.Services.Direct;
 
 namespace SupportAgent.ViewModels;
 
@@ -22,6 +25,8 @@ public partial class MainViewModel : ViewModelBase
     private readonly IServiceProvider _services;
     private RemoteDesktopSession? _remoteDesktopSession;
     private Guid? _activeWebRtcSessionId;
+    private LanService? _lan;
+    private System.Windows.Threading.DispatcherTimer? _lanTimer;
 
     [ObservableProperty]
     private UserSession? _currentSession;
@@ -39,6 +44,17 @@ public partial class MainViewModel : ViewModelBase
     private string _connectionStatusColor = "#EF4444";
 
     public SessionViewModel SessionViewModel => _sessionViewModel;
+
+    // ---- Local network (server-less) mode
+    [ObservableProperty] private bool _isLanMode;
+    [ObservableProperty] private string _lanManualAddress = string.Empty;
+    public ObservableCollection<LanPeerItem> LanPeers { get; } = new();
+    public bool LanEmpty => LanPeers.Count == 0;
+    public string LanComputersLabel => _localizationService.GetString("Lan_Computers");
+    public string LanEmptyLabel => _localizationService.GetString("Lan_None");
+    public string LanRefreshLabel => _localizationService.GetString("Lan_Refresh");
+    public string LanManualPlaceholder => _localizationService.GetString("Lan_ManualHint");
+    public string LanConnectLabel => _localizationService.GetString("Dashboard_Connect");
 
     public string WelcomeMessage => string.Format(
         _localizationService.GetString("Dashboard_Welcome"),
@@ -235,6 +251,126 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    public void SetLanMode(LanService lan)
+    {
+        _lan = lan;
+        IsLanMode = true;
+        ConnectionStatus = _localizationService.GetString("Dashboard_Disconnected");
+        lan.Discovery!.PeersChanged += RefreshLanPeers;
+        RefreshLanPeers();
+        lan.Discovery.Probe();
+        _lanTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _lanTimer.Tick += (_, _) => RefreshLanPeers();
+        _lanTimer.Start();
+    }
+
+    private void RefreshLanPeers()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || _lan?.Discovery is null) return;
+        dispatcher.InvokeAsync(() =>
+        {
+            var peers = _lan.Discovery.Peers;
+            var current = LanPeers.Select(p => p.Id + p.Address + p.Port).ToList();
+            var next = peers.Select(p => p.Id + p.Address + p.Port).ToList();
+            if (current.SequenceEqual(next)) return;
+            LanPeers.Clear();
+            foreach (var p in peers)
+                LanPeers.Add(new LanPeerItem(p.Id, p.Name, p.Platform, p.Address, p.Port));
+            OnPropertyChanged(nameof(LanEmpty));
+        });
+    }
+
+    [RelayCommand]
+    private void RefreshLan() => _lan?.Discovery?.Probe();
+
+    [RelayCommand]
+    private async Task ConnectLanPeerAsync(LanPeerItem? peer)
+    {
+        if (peer is null) return;
+        await ConnectDirectAsync(peer.Address, peer.Port, peer.Name);
+    }
+
+    [RelayCommand]
+    private async Task ConnectLanManualAsync()
+    {
+        var parsed = await LanService.ParseEndpointAsync(LanManualAddress);
+        if (parsed is null)
+        {
+            SetError(_localizationService.GetString("Lan_BadAddress"));
+            return;
+        }
+        await ConnectDirectAsync(parsed.Value.Address, parsed.Value.Port, LanManualAddress.Trim());
+    }
+
+    private async Task ConnectDirectAsync(IPAddress address, int port, string display)
+    {
+        if (_lan is null || IsBusy) return;
+        IsBusy = true;
+        ClearError();
+        ConnectionStatus = _localizationService.GetString("Dashboard_Connecting");
+        ConnectionStatusColor = "#F59E0B";
+        StatusMessage = string.Format(_localizationService.GetString("Lan_WaitingAccept"), display);
+        try
+        {
+            var result = await _lan.ConnectAsync(address, port);
+            if (!result.IsSuccess || result.Channel is null)
+            {
+                ConnectionStatus = _localizationService.GetString("Dashboard_Disconnected");
+                ConnectionStatusColor = "#EF4444";
+                SetError(result.Error ?? _localizationService.GetString("Dashboard_ConnectFailed"));
+                return;
+            }
+
+            var sessionId = Guid.NewGuid();
+            var name = string.IsNullOrWhiteSpace(result.HostName) ? display : result.HostName;
+            StatusMessage = string.Empty;
+            _sessionViewModel.StartSession(sessionId.ToString(), name);
+            await Task.Run(() => StartDirectDesktopAsync(sessionId, result.Channel, name));
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = _localizationService.GetString("Dashboard_Disconnected");
+            ConnectionStatusColor = "#EF4444";
+            SetError($"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task StartDirectDesktopAsync(Guid sessionId, RemoteSupport.Shared.Transport.Direct.TcpDataChannel channel, string deviceName)
+    {
+        if (_remoteDesktopSession is not null)
+        {
+            _sessionViewModel.DetachSession();
+            await _remoteDesktopSession.DisposeAsync();
+        }
+        _remoteDesktopSession = _services.GetRequiredService<RemoteDesktopSession>();
+        _activeWebRtcSessionId = sessionId;
+
+        System.Windows.UIElement? captureElement = null;
+        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            // LAN has bandwidth to spare: start sharper and smoother than the internet defaults.
+            _sessionViewModel.StreamFps = 30;
+            _sessionViewModel.StreamQuality = 75;
+            _sessionViewModel.AttachSession(_remoteDesktopSession);
+            captureElement = System.Windows.Application.Current.Windows
+                .OfType<Views.ShellWindow>()
+                .FirstOrDefault()?.ScreenCaptureElement;
+        });
+
+        await _remoteDesktopSession.StartDirectSessionAsync(sessionId, channel, source => { }, captureElement);
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            ConnectionStatus = _localizationService.GetString("Dashboard_Connected");
+            ConnectionStatusColor = "#10B981";
+        });
+    }
+
     private async Task StartRemoteDesktopAsync(Guid sessionId, string customerDevice)
     {
         try
@@ -287,7 +423,7 @@ public partial class MainViewModel : ViewModelBase
 
     public async Task TerminateActiveSessionAsync()
     {
-        if (_activeWebRtcSessionId is Guid sessionId)
+        if (_activeWebRtcSessionId is Guid sessionId && !IsLanMode)
         {
             await _apiClient.DisconnectSessionAsync(sessionId);
         }
@@ -324,4 +460,25 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ConnectHint));
         OnPropertyChanged(nameof(LayoutDirection));
     }
+}
+
+
+public sealed class LanPeerItem
+{
+    public LanPeerItem(string id, string name, string platform, System.Net.IPAddress address, int port)
+    {
+        Id = id;
+        Name = name;
+        Platform = platform;
+        Address = address;
+        Port = port;
+    }
+
+    public string Id { get; }
+    public string Name { get; }
+    public string Platform { get; }
+    public System.Net.IPAddress Address { get; }
+    public int Port { get; }
+    public string Title => Name;
+    public string Subtitle => $"{Platform} · {Address}";
 }

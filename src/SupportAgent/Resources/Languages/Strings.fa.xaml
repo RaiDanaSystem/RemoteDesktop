@@ -127,4 +127,23 @@
     <system:String x:Key="Status_Ready">آماده</system:String>
     <system:String x:Key="Status_Error">خطا</system:String>
 
+
+    <!-- Local network (server-less) mode -->
+    <system:String x:Key="Shell_LanTitle">رایانه‌های این شبکه</system:String>
+    <system:String x:Key="Shell_LanBody">بدون نیاز به سرور. رایانه‌های دیگری را که این برنامه را در شبکه محلی اجرا کرده‌اند ببینید و مستقیم وصل شوید.</system:String>
+    <system:String x:Key="Lan_ShareToggle">اجازه بده رایانه‌های دیگر این شبکه درخواست دیدن «{0}» را بدهند</system:String>
+    <system:String x:Key="Lan_Computers">رایانه‌های این شبکه</system:String>
+    <system:String x:Key="Lan_None">هنوز رایانه‌ای پیدا نشد. مطمئن شوید برنامه روی رایانه‌ی دیگر باز است و هر دو در یک شبکه‌اند، یا آدرس آن را پایین وارد کنید.</system:String>
+    <system:String x:Key="Lan_Refresh">بازخوانی</system:String>
+    <system:String x:Key="Lan_ManualHint">یا آدرس IP را بنویسید (مثلاً 192.168.1.20)</system:String>
+    <system:String x:Key="Lan_BadAddress">این آدرس قابل فهم نبود.</system:String>
+    <system:String x:Key="Lan_WaitingAccept">منتظر تأیید {0} هستیم…</system:String>
+    <system:String x:Key="Lan_IncomingTitle">درخواست اتصال</system:String>
+    <system:String x:Key="Lan_IncomingBody">«{0}» ({1}) می‌خواهد این رایانه را ببیند.&#10;&#10;بله = دیدن و کنترل&#10;خیر = فقط دیدن&#10;انصراف = رد درخواست</system:String>
+    <system:String x:Key="Lan_Banner">«{0}» در حال دیدن و کنترل این رایانه است.</system:String>
+    <system:String x:Key="Lan_BannerViewOnly">«{0}» در حال دیدن این رایانه است (فقط مشاهده).</system:String>
+    <system:String x:Key="Lan_StopSharing">توقف اشتراک</system:String>
+    <system:String x:Key="Lan_StartFailed">حالت شبکه محلی راه‌اندازی نشد.</system:String>
+    <system:String x:Key="Session_StreamResolution">وضوح</system:String>
+
 </ResourceDictionary>
